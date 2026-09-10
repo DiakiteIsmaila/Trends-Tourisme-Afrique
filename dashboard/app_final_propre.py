@@ -52,102 +52,34 @@ CORP = {
 st.markdown(
     f"""
     <style>
-
-        /* ==============================================================
-           FOND GÉNÉRAL
-           ============================================================== */
-
+        /* Fond général de l'application */
         .stApp {{
             background-color: {CORP["bg"]};
             color: {CORP["text"]};
         }}
 
+        /* Conteneur principal : largeur confortable pour les graphiques */
         .block-container {{
             background: transparent;
             padding-top: 2rem;
             padding-bottom: 3rem;
         }}
 
-
-        /* ==============================================================
-           TEXTE GÉNÉRAL
-           ============================================================== */
-
-        html,
-        body,
-        [class*="css"],
-        .stApp,
+        /* Texte courant */
         .stApp p,
-        .stApp span,
         .stApp label,
-        .stApp li,
-        .stApp div {{
+        .stApp li {{
             color: {CORP["text"]};
         }}
 
-
-        /* ==============================================================
-           TITRES
-           ============================================================== */
-
-        h1, h2, h3, h4, h5, h6 {{
+        /* Contraste des KPI */
+        [data-testid="stMetricLabel"] p,
+        [data-testid="stMetricLabel"] div,
+        [data-testid="stMetricValue"] div {{
             color: {CORP["text"]} !important;
         }}
 
-
-        /* ==============================================================
-           KPI / METRICS
-           ============================================================== */
-
-        [data-testid="stMetric"] {{
-            color: {CORP["text"]} !important;
-        }}
-
-        [data-testid="stMetricLabel"],
-        [data-testid="stMetricLabel"] *,
-        [data-testid="stMetricValue"],
-        [data-testid="stMetricValue"] * {{
-            color: {CORP["text"]} !important;
-        }}
-
-
-        /* ==============================================================
-           SELECTBOX / MULTISELECT / INPUTS
-           ============================================================== */
-
-        [data-baseweb="select"] > div {{
-            background-color: #ffffff !important;
-            color: {CORP["text"]} !important;
-        }}
-
-        [data-baseweb="select"] span,
-        [data-baseweb="select"] div {{
-            color: {CORP["text"]} !important;
-        }}
-
-        [data-baseweb="input"] input {{
-            color: {CORP["text"]} !important;
-            background-color: #ffffff !important;
-        }}
-
-
-        /* ==============================================================
-           SLIDER
-           ============================================================== */
-
-        [data-testid="stSlider"] {{
-            color: {CORP["text"]} !important;
-        }}
-
-        [data-testid="stSlider"] span {{
-            color: {CORP["text"]} !important;
-        }}
-
-
-        /* ==============================================================
-           ONGLETS
-           ============================================================== */
-
+        /* Onglets */
         .stTabs [role="tablist"] button[role="tab"] {{
             color: {CORP["text"]} !important;
             font-weight: 600 !important;
@@ -166,75 +98,16 @@ st.markdown(
             color: {CORP["accent"]} !important;
         }}
 
-
-        /* ==============================================================
-           EXPANDERS
-           ============================================================== */
-
-        [data-testid="stExpander"] {{
-            background-color: transparent !important;
-        }}
-
-        [data-testid="stExpander"] summary,
-        [data-testid="stExpander"] summary * {{
-            color: {CORP["text"]} !important;
-        }}
-
-
-        /* ==============================================================
-           TABLEAUX
-           ============================================================== */
-
-        [data-testid="stDataFrame"] {{
-            color: {CORP["text"]} !important;
-        }}
-
-
-        /* ==============================================================
-           BOUTONS
-           ============================================================== */
-
-        .stButton button,
+        /* Boutons de téléchargement */
         .stDownloadButton button {{
-            color: {CORP["text"]} !important;
-            background-color: {CORP["panel"]} !important;
-            border: 1px solid {CORP["accent"]} !important;
-            font-weight: 600 !important;
+            border-color: {CORP["accent"]};
         }}
-
-        .stButton button:hover,
-        .stDownloadButton button:hover {{
-            border-color: {CORP["accent"]} !important;
-            color: {CORP["accent"]} !important;
-        }}
-
-
-        /* ==============================================================
-           CAPTIONS / TEXTES SECONDAIRES
-           ============================================================== */
-
-        [data-testid="stCaptionContainer"],
-        [data-testid="stCaptionContainer"] * {{
-            color: #6f6a61 !important;
-        }}
-
-
-        /* ==============================================================
-           ALERTES
-           ============================================================== */
-
-        [data-testid="stAlert"] {{
-            color: {CORP["text"]} !important;
-        }}
-
-        [data-testid="stAlert"] * {{
-            color: {CORP["text"]} !important;
-        }}
-
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
 # ==============================================================================
 # 3. CHEMINS ET CHARGEMENT DU DATASET MAÎTRE
 # ==============================================================================
@@ -1302,48 +1175,10 @@ with tab_map:
             )
 
             fig.update_layout(
-    # Marges autour de la carte
-    margin=dict(
-        l=10,
-        r=10,
-        t=70,
-        b=10,
-    ),
-
-    # Même fond que le dashboard
-    paper_bgcolor=CORP["bg"],
-    plot_bgcolor=CORP["bg"],
-
-    # Couleur générale des textes Plotly
-    font=dict(
-        color=CORP["text"],
-        size=13,
-    ),
-
-    # Titre de la carte
-    title=dict(
-        text=f"{map_value_label} — Afrique — {map_year}",
-        font=dict(
-            color=CORP["text"],
-            size=20,
-        ),
-        x=0.01,
-        xanchor="left",
-    ),
-
-    # Légende de l'échelle de couleurs
-    coloraxis_colorbar=dict(
-        title=dict(
-            text=map_value_label,
-            font=dict(
-                color=CORP["text"],
-            ),
-        ),
-        tickfont=dict(
-            color=CORP["text"],
-        ),
-    ),
-)
+                margin=dict(l=10, r=10, t=60, b=10),
+                paper_bgcolor=CORP["bg"],
+                font_color=CORP["text"],
+            )
 
             fig.update_geos(
                 bgcolor=CORP["bg"],
