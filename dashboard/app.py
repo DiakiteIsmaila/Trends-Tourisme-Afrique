@@ -429,7 +429,7 @@ with st.expander("Contrôle technique du dataset"):
 
     st.dataframe(
         layer_counts,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -441,7 +441,7 @@ with st.expander("Contrôle technique du dataset"):
 
     st.dataframe(
         df.head(20),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -452,6 +452,16 @@ with st.expander("Contrôle technique du dataset"):
 
 st.markdown("---")
 st.header("Tableau de bord")
+
+# Les groupes restent accessibles quelle que soit la vue ouverte.
+with st.sidebar:
+    st.header("Filtres")
+    with st.expander("Tendances", expanded=True):
+        trend_destination_filters = st.container()
+        trend_indicator_filters = st.container()
+        trend_period_filters = st.container()
+    origin_filters = st.expander("Provenance", expanded=True)
+    map_filters = st.expander("Carte", expanded=True)
 
 tab_trends, tab_origin, tab_map = st.tabs(
     ["Tendances", "Provenance", "Carte"]
@@ -465,192 +475,166 @@ tab_trends, tab_origin, tab_map = st.tabs(
 # comparer l'évolution des arrivées ou des recettes pour une ou plusieurs
 # destinations, sans convertir les valeurs manquantes en zéro.
 
+
 with tab_trends:
-    st.subheader("Évolution du tourisme international")
-
-    st.caption(
-        "Cet onglet permet d'analyser l'évolution temporelle des arrivées et "
-        "des recettes touristiques internationales pour les sept destinations. "
-        "Les filtres permettent de comparer plusieurs pays sur une même période "
-        "ou d'examiner individuellement leur trajectoire."
+    # Imports scoped to this view; the other views retain their existing behavior.
+    import sys
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from src.indicators import (
+        national_series, annual_variations, consecutive_segments, common_pre2020_summary,
     )
 
-    # --------------------------------------------------------------------------
-    # 1. Choix de l'indicateur
-    # --------------------------------------------------------------------------
-    indicator_label = st.selectbox(
-        "Indicateur",
-        [
-            "Arrivées touristiques internationales",
-            "Recettes touristiques",
-        ],
-        key="trend_indicator",
-    )
-
-    layer_map = {
-        "Arrivées touristiques internationales": "arrivals",
-        "Recettes touristiques": "receipts",
+    st.subheader("Tendances nationales")
+    selected_destinations = trend_destination_filters.multiselect(
+        "Destinations", ordered_destinations(df["destination"]),
+        default=ordered_destinations(df["destination"]), key="trend_destinations")
+    trend_options = {
+        "Arrivées touristiques internationales": ("arrivals", "Personnes"),
+        "Recettes touristiques": ("receipts", "USD courants"),
+        "Ratio recettes / arrivées": ("ratio", "USD courants par arrivée"),
     }
+    indicator_label = trend_indicator_filters.selectbox(
+        "Indicateur", list(trend_options), key="trend_indicator")
+    selected_layer, trend_unit = trend_options[indicator_label]
+    trend_view = trend_indicator_filters.selectbox(
+        "Vue", ["Niveaux dans le temps", "Variation annuelle", "Comparaison des destinations"],
+        key="trend_view")
+    trends_df = national_series(df, selected_layer)
+    year_min, year_max = int(trends_df.year.min()), int(trends_df.year.max())
+    year_range = trend_period_filters.slider(
+        "Période", min_value=year_min, max_value=year_max,
+        value=(year_min, year_max), key="trend_year_range")
+    st.caption(
+        f"Périmètre actif : {', '.join(selected_destinations) or 'Aucune destination sélectionnée'} | "
+        f"{indicator_label} | {trend_unit} | {year_range[0]}–{year_range[1]}.")
+    st.caption(
+        "Recettes et ratio en USD courants, sans correction d'inflation. Le ratio est agrégé. "
+        "Les variations sont descriptives, sans causalité. Les absences ne sont jamais des zéros. "
+        "Les données nationales s'arrêtent au plus tard en 2020 : aucune reprise post-Covid calculée.")
 
-    selected_layer = layer_map[indicator_label]
-
-    # On conserve uniquement les observations réellement disponibles.
-    trends_df = df[
-        (df["dataset_layer"] == selected_layer)
-        & (df["value"].notna())
-    ].copy()
-
-    # --------------------------------------------------------------------------
-    # 2. Choix de la période
-    # --------------------------------------------------------------------------
-    year_min = int(trends_df["year"].min())
-    year_max = int(trends_df["year"].max())
-
-    year_range = st.slider(
-        "Période",
-        min_value=year_min,
-        max_value=year_max,
-        value=(year_min, year_max),
-        step=1,
-        key="trend_year_range",
-    )
-
-    # --------------------------------------------------------------------------
-    # 3. Choix des destinations
-    # --------------------------------------------------------------------------
-    destinations = ordered_destinations(trends_df["destination"])
-
-    selected_destinations = st.multiselect(
-        "Destinations",
-        options=destinations,
-        default=destinations,
-        key="trend_destinations",
-    )
-
-    # --------------------------------------------------------------------------
-    # 4. Filtrage
-    # --------------------------------------------------------------------------
-    filtered_trends = trends_df[
-        (trends_df["year"] >= year_range[0])
-        & (trends_df["year"] <= year_range[1])
-        & (trends_df["destination"].isin(selected_destinations))
-    ].copy()
-
-    if filtered_trends.empty:
-        st.info("Aucune donnée disponible pour cette sélection.")
-
+    if not selected_destinations:
+        st.info("Aucune donnée disponible : sélectionnez une destination.")
     else:
-        st.write(
-            f"**{len(filtered_trends)} observations disponibles** "
-            f"entre {year_range[0]} et {year_range[1]}."
-        )
-
-        # ----------------------------------------------------------------------
-        # 5. Graphique d'évolution
-        # ----------------------------------------------------------------------
-        if selected_layer == "arrivals":
-            y_title = "Arrivées touristiques internationales"
+        filtered_trends = trends_df.loc[
+            trends_df.destination.isin(selected_destinations)
+            & trends_df.year.between(*year_range)].copy()
+        export_df = filtered_trends[["destination", "year", "value", "unit"]].copy()
+        if trend_view == "Comparaison des destinations":
+            comparison_dimension = trend_indicator_filters.selectbox(
+                "Dimension comparée", ["Niveaux 2019", "Variation annuelle médiane pré-2020",
+                                       "Volatilité pré-2020"], key="trend_comparison")
+            st.caption("Cette comparaison utilise son périmètre commun indiqué ci-dessous ; le filtre de période ne s'y applique pas.")
+            if comparison_dimension == "Niveaux 2019":
+                view_data = trends_df.loc[trends_df.destination.isin(selected_destinations) & trends_df.year.eq(2019)].copy()
+                field, axis_title = "value", trend_unit
+                st.write(f"**Niveaux nationaux — 2019 — {trend_unit}**")
+                export_df = view_data[["destination", "year", "value", "unit"]].copy()
+                if view_data.value.notna().sum() != len(selected_destinations):
+                    st.warning("Données insuffisantes pour comparer toutes les destinations sélectionnées en 2019.")
+            elif selected_layer == "ratio":
+                view_data = pd.DataFrame()
+                st.info("La dynamique et la volatilité validées concernent les arrivées et les recettes. Sélectionnez l'un de ces indicateurs.")
+            else:
+                summary, common_years = common_pre2020_summary(df, selected_destinations)
+                view_data = summary.loc[summary.indicator.eq(selected_layer)].copy()
+                field = "median_pct" if comparison_dimension.startswith("Variation") else "volatility_points"
+                axis_title = "%" if field == "median_pct" else "Points de pourcentage"
+                if common_years:
+                    st.write(f"**Années de variation communes : {', '.join(map(str, common_years))}**")
+                    st.caption(
+                        f"{len(common_years)} variations par série ; mêmes années pour arrivées et recettes. "
+                        "Médiane annuelle distincte du CAGR ; volatilité = écart-type échantillonnal, sans prédiction de risque.")
+                view_data["annees_communes"] = ", ".join(map(str, common_years))
+                export_df = view_data.copy()
+            if not view_data.empty:
+                plot_data = view_data.loc[view_data[field].notna()]
+                if not plot_data.empty:
+                    chart = alt.Chart(plot_data).mark_bar().encode(
+                        y=alt.Y("destination:N", title="Destination", sort="-x"),
+                        x=alt.X(f"{field}:Q", title=axis_title),
+                        tooltip=["destination:N", alt.Tooltip(f"{field}:Q", format=",.2f")])
+                    st.altair_chart(chart, width="stretch")
+                else:
+                    st.info("Données insuffisantes pour cette comparaison.")
+                st.dataframe(view_data, width="stretch", hide_index=True)
+            else:
+                export_df = pd.DataFrame()
         else:
-            y_title = "Recettes touristiques"
-
-        chart = (
-            alt.Chart(filtered_trends)
-            .mark_line(point=True)
-            .encode(
-                x=alt.X(
-                    "year:O",
-                    title="Année",
-                ),
-                y=alt.Y(
-                    "value:Q",
-                    title=y_title,
-                ),
-                color=alt.Color(
-                    "destination:N",
-                    title="Destination",
-                ),
-                tooltip=[
-                    alt.Tooltip(
-                        "destination:N",
-                        title="Destination",
-                    ),
-                    alt.Tooltip(
-                        "year:O",
-                        title="Année",
-                    ),
-                    alt.Tooltip(
-                        "value:Q",
-                        title="Valeur",
-                        format=",.0f",
-                    ),
-                    alt.Tooltip(
-                        "unit:N",
-                        title="Unité",
-                    ),
-                ],
-            )
-            .properties(height=500)
-        )
-
-        st.altair_chart(
-            chart,
-            use_container_width=True,
-        )
-
-        st.caption(
-            "Lecture : chaque courbe représente une destination. Une interruption "
-            "ou une absence de point correspond à une donnée non disponible ; elle "
-            "n'est pas interprétée comme une valeur nulle."
-        )
-
-        # ----------------------------------------------------------------------
-        # 6. Tableau des observations affichées
-        # ----------------------------------------------------------------------
-        st.write("### Données affichées")
-
-        trends_display = (
-            filtered_trends[
-                ["destination", "year", "value", "unit"]
-            ]
-            .sort_values(["destination", "year"])
-            .rename(
-                columns={
-                    "destination": "Destination",
-                    "year": "Année",
-                    "value": "Valeur",
-                    "unit": "Unité",
-                }
-            )
-        )
-
-        st.dataframe(
-            trends_display,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        # ----------------------------------------------------------------------
-        # 7. Export CSV
-        # ----------------------------------------------------------------------
-        # L'export conserve les valeurs numériques brutes du dataset.
-        export_df = filtered_trends[
-            ["destination", "year", "value", "unit"]
-        ].sort_values(["destination", "year"])
-
-        csv_bytes = export_df.to_csv(index=False).encode("utf-8")
-
-        file_name = (
-            f"tendances_{selected_layer}_"
-            f"{year_range[0]}_{year_range[1]}.csv"
-        )
-
-        st.download_button(
-            label="Télécharger les données affichées en CSV",
-            data=csv_bytes,
-            file_name=file_name,
-            mime="text/csv",
-            key="download_trends",
-        )
+            if trend_view == "Variation annuelle" and selected_layer == "ratio":
+                st.info("Les variations annuelles proposées concernent les arrivées ou les recettes, pas le ratio.")
+                export_df = pd.DataFrame()
+            else:
+                if trend_view == "Variation annuelle":
+                    # Compute before period filtering so t-1 remains available at the left boundary.
+                    changes = annual_variations(trends_df)
+                    view_data = changes.loc[changes.destination.isin(selected_destinations) & changes.year.between(*year_range)].copy()
+                    field, axis_title = "variation_pct", "Variation annuelle (%)"
+                    export_df = view_data[["destination", "year", "value", "unit", "variation_pct"]].copy()
+                    plot_data = view_data.loc[view_data[field].notna()].copy()
+                    plot_data["periode"] = plot_data.year.eq(2020).map({True: "2020 — rupture exceptionnelle", False: "Autres années"})
+                    if not plot_data.empty:
+                        chart = alt.Chart(plot_data).mark_circle(size=70).encode(
+                            x=alt.X("year:Q", title="Année de fin", axis=alt.Axis(format="d")),
+                            y=alt.Y("variation_pct:Q", title=axis_title),
+                            color=alt.Color("destination:N", title="Destination"),
+                            shape=alt.Shape("periode:N", title="Période"),
+                            tooltip=["destination:N", "year:O", "periode:N", alt.Tooltip("variation_pct:Q", format=".2f")])
+                    st.caption("2020 : rupture exceptionnelle, identifiée séparément. Calcul uniquement entre années consécutives renseignées, avec une base strictement positive.")
+                else:
+                    view_data = filtered_trends
+                    plot_data = consecutive_segments(view_data)
+                    if not plot_data.empty:
+                        chart = alt.Chart(plot_data).mark_line(point=True).encode(
+                            x=alt.X("year:Q", title="Année", axis=alt.Axis(format="d")),
+                            y=alt.Y("value:Q", title=trend_unit),
+                            color=alt.Color("destination:N", title="Destination"),
+                            detail="segment:N", order="year:Q",
+                            tooltip=["destination:N", "year:O", alt.Tooltip("value:Q", format=",.2f"), "unit:N"])
+                if not plot_data.empty:
+                    st.altair_chart(chart, width="stretch")
+                else:
+                    st.info("Aucune valeur calculable pour cette sélection.")
+                st.dataframe(export_df, width="stretch", hide_index=True)
+        if not export_df.empty:
+            # Enrich only the CSV; displayed tables and calculations are unchanged.
+            export_metadata = ["metric", "metric_type", "source_name", "source_reference",
+                               "quality_flag", "coverage_scope"]
+            if trend_view == "Comparaison des destinations" and comparison_dimension != "Niveaux 2019":
+                export_df = export_df[["destination", "indicator", field, "observations", "annees_communes"]].copy()
+                export_df["unit"] = "%" if field == "median_pct" else "percentage_points"
+                export_df["reference_start_year"] = min(common_years) if common_years else None
+                export_df["reference_end_year"] = max(common_years) if common_years else None
+                reference_years = set(common_years) | {year - 1 for year in common_years}
+                reference = df.loc[df.dataset_layer.eq(selected_layer) & df.year.isin(reference_years)]
+                metadata = reference.groupby("destination")[export_metadata].agg(
+                    lambda values: " | ".join(sorted(set(values.dropna().astype(str))))).reset_index()
+                export_df = export_df.merge(metadata, on="destination", how="left", validate="one_to_one")
+            elif selected_layer == "ratio":
+                export_df = trends_df.merge(
+                    export_df[["destination", "year"]], on=["destination", "year"],
+                    how="inner", validate="one_to_one"
+                )[["destination", "year", "receipts", "arrivals", "value", "unit"]].rename(
+                    columns={"value": "ratio_receipts_per_arrival"})
+                export_df["indicator"] = "receipts_per_arrival"
+                for source_layer in ["arrivals", "receipts"]:
+                    metadata = df.loc[df.dataset_layer.eq(source_layer),
+                                      ["destination", "year"] + export_metadata].rename(
+                        columns={column: f"{column}_{source_layer}" for column in export_metadata})
+                    export_df = export_df.merge(metadata, on=["destination", "year"], how="left", validate="one_to_one")
+            else:
+                export_df = export_df.copy()
+                export_df["indicator"] = selected_layer
+                metadata = df.loc[df.dataset_layer.eq(selected_layer),
+                                  ["destination", "year"] + export_metadata]
+                export_df = export_df.merge(metadata, on=["destination", "year"], how="left", validate="one_to_one")
+                if "variation_pct" in export_df:
+                    export_df["variation_unit"] = "%"
+            st.download_button(
+                "Télécharger les données affichées en CSV",
+                data=export_df.to_csv(index=False).encode("utf-8"),
+                file_name=f"tendances_{selected_layer}_{safe_filename(trend_view)}.csv",
+                mime="text/csv", key="download_trends")
 
 
 # ==============================================================================
@@ -661,490 +645,111 @@ with tab_trends:
 # des sources qui n'ont pas le même périmètre, la même granularité ou la même
 # unité de mesure.
 
+
 with tab_origin:
-    st.subheader("Provenance des touristes")
-
+    st.subheader("Provenance des visiteurs")
+    provenance_df = df.loc[df.dataset_layer.eq("provenance")].copy()
+    selected_origin_destination = origin_filters.selectbox(
+        "Destination", ordered_destinations(provenance_df.destination), key="origin_destination")
+    destination_df = provenance_df.loc[provenance_df.destination.eq(selected_origin_destination)].copy()
+    selected_origin_year = origin_filters.selectbox(
+        "Année", sorted(destination_df.year.unique(), reverse=True), key="origin_year")
+    origin_filtered = destination_df.loc[destination_df.year.eq(selected_origin_year)].copy()
+    origin_group_columns = ["granularity", "metric_type", "unit", "coverage_scope"]
+    st.caption(f"Périmètre actif : {selected_origin_destination} | {selected_origin_year}.")
     st.caption(
-        "Cet onglet analyse l'origine géographique des touristes selon les données "
-        "disponibles pour chaque destination. La couverture varie selon les sources : "
-        "les comparaisons sont donc limitées aux périmètres réellement disponibles "
-        "et aucun marché manquant n'est reconstitué."
-    )
-
-    # --------------------------------------------------------------------------
-    # 1. Préparation des données de provenance
-    # --------------------------------------------------------------------------
-    provenance_df = df[
-        (df["dataset_layer"] == "provenance")
-        & (df["value"].notna())
-    ].copy()
-
-    # Diagnostic technique disponible à la demande.
-    with st.expander("Diagnostic des données de provenance"):
-        diagnostic_col1, diagnostic_col2 = st.columns(2)
-
-        with diagnostic_col1:
-            st.write("#### Granularités")
-            st.write(
-                sorted(
-                    provenance_df["granularity"]
-                    .dropna()
-                    .astype(str)
-                    .unique()
-                    .tolist()
-                )
-            )
-
-            st.write("#### Unités")
-            st.write(
-                sorted(
-                    provenance_df["unit"]
-                    .dropna()
-                    .astype(str)
-                    .unique()
-                    .tolist()
-                )
-            )
-
-        with diagnostic_col2:
-            st.write("#### Périmètres de couverture")
-            st.write(
-                sorted(
-                    provenance_df["coverage_scope"]
-                    .dropna()
-                    .astype(str)
-                    .unique()
-                    .tolist()
-                )
-            )
-
-            st.write("#### Indicateurs de qualité")
-            st.write(
-                sorted(
-                    provenance_df["quality_flag"]
-                    .dropna()
-                    .astype(str)
-                    .unique()
-                    .tolist()
-                )
-            )
-
-    # --------------------------------------------------------------------------
-    # 2. Sélection de la destination et de l'année
-    # --------------------------------------------------------------------------
-    provenance_destinations = ordered_destinations(
-        provenance_df["destination"]
-    )
-
-    selected_origin_destination = st.selectbox(
-        "Destination",
-        options=provenance_destinations,
-        key="origin_destination",
-    )
-
-    destination_df = provenance_df[
-        provenance_df["destination"] == selected_origin_destination
-    ].copy()
-
-    available_years = sorted(
-        destination_df["year"]
-        .dropna()
-        .astype(int)
-        .unique()
-        .tolist(),
-        reverse=True,
-    )
-
-    selected_origin_year = st.selectbox(
-        "Année",
-        options=available_years,
-        key="origin_year",
-    )
-
-    origin_filtered = destination_df[
-        destination_df["year"] == selected_origin_year
-    ].copy()
-
-    units = sorted(
-        origin_filtered["unit"]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
-
-    st.write(
-        f"**{len(origin_filtered)} observations disponibles** "
-        f"pour {selected_origin_destination} en {selected_origin_year}."
-    )
-
-    if units:
-        st.caption("Unité(s) présente(s) dans la sélection : " + ", ".join(units))
-
-    # --------------------------------------------------------------------------
-    # 3. Visualisation
-    # --------------------------------------------------------------------------
-    # Égypte : cas traité séparément car le dataset ne contient qu'un marché-pays
-    # vérifié (États-Unis), complété par une répartition régionale pour 2019.
+        "Les marchés ne sont comparés qu'au sein d'une même année, granularité, mesure et couverture. "
+        "Aucun classement entre destinations. Une valeur absente n'est pas un zéro.")
+    st.write("### Couverture de la sélection")
+    origin_coverage = origin_filtered.groupby(
+        origin_group_columns + ["quality_flag"], dropna=False).agg(
+        lignes=("value", "size"), valeurs_renseignees=("value", "count"),
+        valeurs_absentes=("value", lambda s: int(s.isna().sum()))).reset_index()
+    origin_coverage.insert(0, "year", selected_origin_year)
+    origin_coverage.insert(0, "destination", selected_origin_destination)
+    st.dataframe(origin_coverage, width="stretch", hide_index=True)
+    if selected_origin_destination == "Tunisie":
+        tunisian_missing = destination_df.loc[destination_df.value.isna()]
+        st.caption(
+            f"{len(tunisian_missing)} valeurs absentes dans la provenance tunisienne ; "
+            "les absences 2017–2018 restent non vérifiées (missing_unverified), jamais remplacées par zéro.")
+        if not tunisian_missing.empty:
+            missing_coverage = tunisian_missing.groupby(["year", "quality_flag"]).size().reset_index(name="valeurs_absentes")
+            st.dataframe(missing_coverage, width="stretch", hide_index=True)
+    if selected_origin_destination == "Tanzanie":
+        st.info(
+            "Top 15 de l'Exit Survey : parts publiées, susceptibles de totaliser moins de 100 %. "
+            "Aucune renormalisation et aucune conversion en volumes.")
     if selected_origin_destination == "Égypte":
+        st.warning(
+            "Un seul marché pays est vérifié : il ne représente pas nécessairement le principal marché. "
+            "La couverture ne permet aucun classement complet des marchés égyptiens.")
+        st.caption(
+            "Le marché pays suit l'année sélectionnée. Le panneau régional complémentaire est fixé à 2019 ; "
+            "parts des touristes et parts des nuitées sont distinctes.")
 
-        st.markdown(
-            f"""
-            <div style="
-                background-color: {CORP['panel']};
-                color: {CORP['text']};
-                border-left: 5px solid {CORP['accent']};
-                padding: 14px 16px;
-                border-radius: 8px;
-                margin: 10px 0 20px 0;
-                font-size: 0.95rem;
-                line-height: 1.5;
-            ">
-                <strong>Comparabilité limitée — Égypte</strong><br>
-                La couverture par pays est incomplète. Les États-Unis constituent
-                le seul marché-pays vérifié dans le dataset et ne doivent donc pas
-                être interprétés comme le principal marché d'origine de l'Égypte.
-                La répartition régionale de 2019 est présentée séparément.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        # ----------------------------------------------------------------------
-        # 3A. Marché-pays vérifié
-        # ----------------------------------------------------------------------
-        egypt_country = origin_filtered[
-            (origin_filtered["granularity"] == "country")
-            & (origin_filtered["unit"] == "persons")
-        ].copy()
-
-        if not egypt_country.empty:
-            st.write(
-                f"### Marché-pays vérifié — {selected_origin_year}"
-            )
-
-            egypt_country_chart = (
-                alt.Chart(egypt_country)
-                .mark_bar()
-                .encode(
-                    x=alt.X(
-                        "value:Q",
-                        title="Touristes",
-                    ),
-                    y=alt.Y(
-                        "origin_name:N",
-                        title="Marché d'origine",
-                    ),
-                    tooltip=[
-                        alt.Tooltip(
-                            "origin_name:N",
-                            title="Marché",
-                        ),
-                        alt.Tooltip(
-                            "value:Q",
-                            title="Touristes",
-                            format=",.0f",
-                        ),
-                        alt.Tooltip(
-                            "coverage_scope:N",
-                            title="Couverture",
-                        ),
-                    ],
-                )
-                .properties(height=180)
-            )
-
-            st.altair_chart(
-                egypt_country_chart,
-                use_container_width=True,
-            )
-
-            st.caption(
-                "Cette barre indique uniquement le marché-pays vérifié disponible "
-                "dans la source. Elle ne constitue pas un classement complet des "
-                "marchés émetteurs de l'Égypte."
-            )
-
-        # ----------------------------------------------------------------------
-        # 3B. Répartition régionale des touristes — 2019
-        # ----------------------------------------------------------------------
-        # Ce filtre utilise explicitement regional_tourist_share afin de ne pas
-        # mélanger la part des touristes et la part des nuitées.
-        egypt_regions = provenance_df[
-            (provenance_df["destination"] == "Égypte")
-            & (provenance_df["year"] == 2019)
-            & (provenance_df["granularity"] == "regional_aggregate")
-            & (provenance_df["unit"] == "share")
-            & (provenance_df["metric_type"] == "regional_tourist_share")
-            & (provenance_df["value"].notna())
-        ].copy()
-
-        if not egypt_regions.empty:
-            egypt_regions["display_value"] = egypt_regions["value"] * 100
-            egypt_regions = egypt_regions.sort_values(
-                "display_value",
-                ascending=False,
-            )
-
-            st.markdown("---")
-            st.write("### Répartition régionale des touristes — 2019")
-
-            st.caption(
-                "Ces données représentent des parts régionales de touristes en 2019. "
-                "Elles sont distinctes des volumes par pays et des parts de nuitées."
-            )
-
-            egypt_region_chart = (
-                alt.Chart(egypt_regions)
-                .mark_bar()
-                .encode(
-                    x=alt.X(
-                        "display_value:Q",
-                        title="Part des touristes (%)",
-                    ),
-                    y=alt.Y(
-                        "origin_name:N",
-                        title="Région d'origine",
-                        sort="-x",
-                    ),
-                    tooltip=[
-                        alt.Tooltip(
-                            "origin_name:N",
-                            title="Région",
-                        ),
-                        alt.Tooltip(
-                            "display_value:Q",
-                            title="Part des touristes (%)",
-                            format=".1f",
-                        ),
-                    ],
-                )
-                .properties(height=300)
-            )
-
-            st.altair_chart(
-                egypt_region_chart,
-                use_container_width=True,
-            )
-
-    else:
-        # ----------------------------------------------------------------------
-        # 3C. Cas général : observations de granularité « country »
-        # ----------------------------------------------------------------------
-        # Les agrégats régionaux, totaux et données de diaspora restent visibles
-        # dans le tableau de contrôle, mais ne sont pas mélangés au graphique.
-        country_origins = origin_filtered[
-            origin_filtered["granularity"] == "country"
-        ].copy()
-
-        if country_origins.empty:
-            st.warning(
-                "Aucune donnée par pays d'origine n'est disponible "
-                "pour cette sélection."
-            )
-
-        else:
-            origin_units = (
-                country_origins["unit"]
-                .dropna()
-                .astype(str)
-                .unique()
-                .tolist()
-            )
-
-            if len(origin_units) > 1:
-                st.warning(
-                    "Plusieurs unités sont présentes dans cette sélection. "
-                    "Elles ne sont pas combinées dans un même graphique."
-                )
-
+    def render_origin_groups(table, heading):
+        st.write(heading)
+        if table.empty:
+            st.info("Aucune observation publiée pour ce périmètre.")
+            return
+        # Quality is included in grouping: missing rows remain visible in their own group.
+        for identity, group in table.groupby(origin_group_columns + ["quality_flag"], dropna=False, sort=False):
+            granularity, metric_type, unit, scope, quality = identity
+            st.write(f"**{granularity} — {metric_type} — {unit}**")
+            st.caption(f"Année(s) : {', '.join(map(str, sorted(group.year.unique())))} | Couverture : {scope} | Qualité : {quality}")
+            if quality in ["exact_panel18", "exact_top30", "exact_main7", "survey_share_top15"]:
+                st.caption("Panel partiel / Top-N : un classement décrit uniquement les marchés publiés, sans exhaustivité nationale.")
             else:
-                origin_unit = origin_units[0]
-                country_origins = country_origins.copy()
+                st.caption("Périmètre publié uniquement ; ne pas additionner agrégats et composantes.")
+            available = group.loc[group.value.notna()].copy()
+            # Only homogeneous country or regional categories are ranked.
+            chart_allowed = granularity in ["country", "regional_aggregate"]
+            if not available.empty and chart_allowed:
+                available["display_value"] = available.value * 100 if unit == "share" else available.value
+                value_label = "Part publiée (%)" if unit == "share" else "Personnes" if unit == "persons" else unit
+                chart = alt.Chart(available).mark_bar().encode(
+                    x=alt.X("display_value:Q", title=value_label),
+                    y=alt.Y("origin_name:N", title="Catégorie publiée", sort="-x"),
+                    tooltip=["origin_name:N", "year:O", alt.Tooltip("display_value:Q", title=value_label, format=",.2f"),
+                             "metric_type:N", "coverage_scope:N", "quality_flag:N"]
+                ).properties(height=max(180, min(800, len(available) * 28)))
+                st.altair_chart(chart, width="stretch")
+            display_group = group[[
+                "destination", "year", "origin_name", "granularity", "metric_type",
+                "value", "unit", "coverage_scope", "quality_flag", "source_name", "source_reference", "notes"
+            ]].copy()
+            # No global sort across incompatible categories or units.
+            display_group["Valeur affichée"] = display_group.apply(
+                lambda row: "Non disponible" if pd.isna(row.value) else format_display_value(row.value, row.unit), axis=1)
+            st.dataframe(display_group, width="stretch", hide_index=True)
 
-                if origin_unit == "persons":
-                    value_title = "Touristes"
-                    tooltip_format = ",.0f"
-                    country_origins["display_value"] = country_origins["value"]
+    if selected_origin_destination == "Égypte":
+        render_origin_groups(origin_filtered.loc[origin_filtered.granularity.eq("country")],
+                             "### Marché pays vérifié — année sélectionnée")
+        egypt_regions = destination_df.loc[
+            destination_df.year.eq(2019) & destination_df.granularity.eq("regional_aggregate")
+            & destination_df.unit.eq("share")
+            & destination_df.metric_type.isin(["regional_tourist_share", "regional_tourist_nights_share"])].copy()
+        render_origin_groups(egypt_regions, "### Parts régionales — 2019 uniquement")
+    else:
+        render_origin_groups(origin_filtered, "### Données par groupes comparables")
 
-                elif origin_unit == "share":
-                    value_title = "Part des touristes (%)"
-                    tooltip_format = ".1f"
-
-                    # Les parts sont stockées sous forme décimale : 0.15 = 15 %.
-                    country_origins["display_value"] = (
-                        country_origins["value"] * 100
-                    )
-
-                else:
-                    value_title = origin_unit
-                    tooltip_format = ",.2f"
-                    country_origins["display_value"] = country_origins["value"]
-
-                country_origins = country_origins.sort_values(
-                    "display_value",
-                    ascending=False,
-                )
-
-                st.write(
-                    f"### Marchés d'origine — "
-                    f"{selected_origin_destination} — "
-                    f"{selected_origin_year}"
-                )
-
-                origin_chart = (
-                    alt.Chart(country_origins)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X(
-                            "display_value:Q",
-                            title=value_title,
-                        ),
-                        y=alt.Y(
-                            "origin_name:N",
-                            title="Marché d'origine",
-                            sort="-x",
-                        ),
-                        tooltip=[
-                            alt.Tooltip(
-                                "origin_name:N",
-                                title="Marché d'origine",
-                            ),
-                            alt.Tooltip(
-                                "display_value:Q",
-                                title=value_title,
-                                format=tooltip_format,
-                            ),
-                            alt.Tooltip(
-                                "quality_flag:N",
-                                title="Qualité / périmètre",
-                            ),
-                            alt.Tooltip(
-                                "coverage_scope:N",
-                                title="Couverture",
-                            ),
-                        ],
-                    )
-                    .properties(
-                        height=max(350, len(country_origins) * 28)
-                    )
-                )
-
-                st.altair_chart(
-                    origin_chart,
-                    use_container_width=True,
-                )
-
-                st.caption(
-                    "Le graphique présente uniquement les observations de granularité "
-                    "« country ». Les agrégats régionaux, totaux et données de diaspora "
-                    "sont volontairement exclus pour éviter de mélanger des niveaux "
-                    "d'analyse différents."
-                )
-
-    # --------------------------------------------------------------------------
-    # 4. Tableau complet de la sélection
-    # --------------------------------------------------------------------------
-    st.write("### Données de provenance disponibles")
-
-    # metric_type est conservé dans le tableau afin de distinguer, notamment
-    # pour l'Égypte, la part des touristes de la part des nuitées.
-    origin_display = origin_filtered[
-        [
-            "origin_name",
-            "origin_region",
-            "granularity",
-            "metric_type",
-            "value",
-            "unit",
-            "coverage_scope",
-            "quality_flag",
-        ]
-    ].copy()
-
-    origin_display["Valeur affichée"] = origin_display.apply(
-        lambda row: format_display_value(row["value"], row["unit"]),
-        axis=1,
-    )
-
-    origin_display["Type d'indicateur"] = (
-        origin_display["metric_type"]
-        .replace(METRIC_TYPE_LABELS)
-    )
-
-    origin_display = origin_display.sort_values(
-        "value",
-        ascending=False,
-    )
-
-    origin_display = origin_display.rename(
-        columns={
-            "origin_name": "Marché d'origine",
-            "origin_region": "Région d'origine",
-            "granularity": "Granularité",
-            "unit": "Unité",
-            "coverage_scope": "Périmètre",
-            "quality_flag": "Qualité",
-        }
-    )
-
-    origin_display = origin_display[
-        [
-            "Marché d'origine",
-            "Région d'origine",
-            "Granularité",
-            "Type d'indicateur",
-            "Valeur affichée",
-            "Unité",
-            "Périmètre",
-            "Qualité",
-        ]
-    ]
-
-    st.dataframe(
-        origin_display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    # --------------------------------------------------------------------------
-    # 5. Export CSV
-    # --------------------------------------------------------------------------
-    # L'export conserve les valeurs brutes : une part de 15 % reste 0.15 avec
-    # unit == "share". Cela préserve l'intégrité analytique du dataset.
     export_origin_columns = [
-        "destination",
-        "year",
-        "origin_name",
-        "origin_region",
-        "granularity",
-        "metric_type",
-        "value",
-        "unit",
-        "coverage_scope",
-        "quality_flag",
+        "destination", "year", "origin_name", "origin_region", "granularity",
+        "metric_type", "value", "unit", "coverage_scope", "quality_flag",
+        "source_name", "source_reference", "notes",
     ]
-
-    export_origin = (
-        origin_filtered[export_origin_columns]
-        .sort_values(["granularity", "value"], ascending=[True, False])
-    )
-
-    origin_csv = export_origin.to_csv(index=False).encode("utf-8")
-
-    origin_file_name = (
-        f"provenance_"
-        f"{safe_filename(selected_origin_destination)}_"
-        f"{selected_origin_year}.csv"
-    )
-
     st.download_button(
-        label="Télécharger les données de provenance en CSV",
-        data=origin_csv,
-        file_name=origin_file_name,
-        mime="text/csv",
-        key="download_origin",
-    )
+        "Télécharger la sélection annuelle de provenance en CSV",
+        data=origin_filtered[export_origin_columns].to_csv(index=False).encode("utf-8"),
+        file_name=f"provenance_{safe_filename(selected_origin_destination)}_{selected_origin_year}.csv",
+        mime="text/csv", key="download_origin")
+    if selected_origin_destination == "Égypte" and not egypt_regions.empty:
+        st.download_button(
+            "Télécharger les parts régionales de 2019 en CSV",
+            data=egypt_regions[export_origin_columns].to_csv(index=False).encode("utf-8"),
+            file_name="provenance_egypte_regions_2019.csv", mime="text/csv", key="download_origin_regions")
 
 
 # ==============================================================================
@@ -1155,251 +760,72 @@ with tab_origin:
 # donnée. Les codes ISO-3 sont utilisés pour fiabiliser la reconnaissance des
 # sept destinations, notamment Maurice (MUS).
 
+
 with tab_map:
-    st.subheader("Comparaison géographique")
-
-    st.caption(
-        "Cet onglet propose une lecture géographique des arrivées ou des recettes "
-        "touristiques pour une année donnée. Les pays sans observation disponible "
-        "restent sans valeur : aucune donnée manquante n'est transformée en zéro."
-    )
-
-    if not HAS_PLOTLY:
-        st.error(
-            "Plotly n'est pas installé. Installez-le avec : "
-            "py -m pip install plotly"
-        )
-
+    st.subheader("Comparaison géographique nationale")
+    map_indicator_label = map_filters.selectbox(
+        "Indicateur cartographié",
+        ["Arrivées touristiques internationales", "Recettes touristiques"],
+        key="map_indicator")
+    map_layer = {"Arrivées touristiques internationales": "arrivals",
+                 "Recettes touristiques": "receipts"}[map_indicator_label]
+    map_unit = "persons" if map_layer == "arrivals" else "current_USD"
+    map_unit_label = "Personnes" if map_layer == "arrivals" else "USD courants"
+    map_source = df.loc[
+        df.dataset_layer.eq(map_layer) & df.granularity.eq("destination_total")
+        & df.metric_type.eq("destination_total") & df.unit.eq(map_unit)].copy()
+    if map_source.duplicated(["destination", "year"]).any():
+        st.error("Clés nationales dupliquées : carte non disponible.")
+    elif map_source.empty:
+        st.info("Aucune donnée nationale disponible.")
     else:
-        # ----------------------------------------------------------------------
-        # 1. Choix de l'indicateur
-        # ----------------------------------------------------------------------
-        map_indicator_label = st.selectbox(
-            "Indicateur cartographié",
-            [
-                "Arrivées touristiques internationales",
-                "Recettes touristiques",
-            ],
-            key="map_indicator",
-        )
-
-        map_layer_map = {
-            "Arrivées touristiques internationales": "arrivals",
-            "Recettes touristiques": "receipts",
-        }
-
-        map_layer = map_layer_map[map_indicator_label]
-
-        map_source = df[
-            (df["dataset_layer"] == map_layer)
-            & (df["value"].notna())
-        ].copy()
-
-        # ----------------------------------------------------------------------
-        # 2. Choix de l'année
-        # ----------------------------------------------------------------------
-        map_years = sorted(
-            map_source["year"]
-            .dropna()
-            .astype(int)
-            .unique()
-            .tolist(),
-            reverse=True,
-        )
-
-        map_year = st.selectbox(
-            "Année",
-            options=map_years,
-            key="map_year",
-        )
-
-        # ----------------------------------------------------------------------
-        # 3. Données réellement disponibles pour l'année
-        # ----------------------------------------------------------------------
-        map_df = map_source[
-            map_source["year"] == map_year
-        ][
-            ["destination", "value", "unit"]
-        ].copy()
-
-        map_df["iso_alpha"] = map_df["destination"].map(COUNTRY_ISO_MAP)
-
-        # Le diagnostic ci-dessous détecte immédiatement un nom de pays qui
-        # n'aurait pas de code ISO associé.
-        unmapped = map_df[
-            map_df["iso_alpha"].isna()
-        ]["destination"].dropna().unique().tolist()
-
-        if unmapped:
-            st.warning(
-                "Certaines destinations ne peuvent pas être cartographiées : "
-                + ", ".join(unmapped)
-            )
-
-        mapped_df = map_df[
-            map_df["iso_alpha"].notna()
-        ].copy()
-
-        if map_layer == "arrivals":
-            map_value_label = "Arrivées touristiques"
-        else:
-            map_value_label = "Recettes touristiques"
-
-        # ----------------------------------------------------------------------
-        # 4. Information de couverture
-        # ----------------------------------------------------------------------
-        available_map_destinations = set(mapped_df["destination"].tolist())
-        all_project_destinations = set(
-            ordered_destinations(df["destination"])
-        )
-        missing_map_destinations = [
-            d
-            for d in DESTINATION_ORDER
-            if d in all_project_destinations
-            and d not in available_map_destinations
-        ]
-
-        st.write(
-            f"**{len(available_map_destinations)} destination(s) cartographiée(s)** "
-            f"pour {map_year}."
-        )
-
-        if missing_map_destinations:
-            st.caption(
-                "Sans valeur disponible pour cette année : "
-                + ", ".join(missing_map_destinations)
-                + "."
-            )
-
-        # ----------------------------------------------------------------------
-        # 5. Carte choroplèthe
-        # ----------------------------------------------------------------------
-        if mapped_df.empty:
+        map_years = sorted(map_source.year.unique(), reverse=True)
+        map_year = map_filters.selectbox(
+            "Année", map_years, index=map_years.index(2019) if 2019 in map_years else 0,
+            key="map_year")
+        # Reindex only the destination perimeter; no observed value is filled.
+        map_df = map_source.loc[map_source.year.eq(map_year), [
+            "destination", "iso3", "year", "dataset_layer", "value", "unit",
+            "source_name", "quality_flag"
+        ]].set_index("destination").reindex(DESTINATION_ORDER).reset_index()
+        map_df["iso3"] = map_df.destination.map(COUNTRY_ISO_MAP)
+        map_df["year"] = map_year
+        map_df["dataset_layer"] = map_layer
+        map_df["unit"] = map_unit
+        mapped_df = map_df.loc[map_df.value.notna() & map_df.iso3.notna()].copy()
+        missing_map_destinations = map_df.loc[map_df.value.isna(), "destination"].tolist()
+        st.caption(
+            f"Périmètre actif : {map_indicator_label} | {map_year} | {map_unit_label} | "
+            f"{len(mapped_df)}/{len(map_df)} destinations couvertes.")
+        st.caption("Sans valeur disponible : " + (", ".join(missing_map_destinations) or "aucune") + ".")
+        st.caption(
+            "Même année pour toutes les destinations. Les absences restent non disponibles, jamais égales à zéro. "
+            "Les recettes sont nominales, sans correction d'inflation.")
+        if not HAS_PLOTLY:
+            st.error("Plotly n'est pas disponible : consultez le tableau et l'export.")
+        elif mapped_df.empty:
             st.info("Aucune donnée cartographiable pour cette sélection.")
-
         else:
             fig = px.choropleth(
-                mapped_df,
-                locations="iso_alpha",
-                locationmode="ISO-3",
-                color="value",
-                scope="africa",
-                hover_name="destination",
-                hover_data={
-                    "value": ":,.0f",
-                    "unit": True,
-                    "iso_alpha": False,
-                },
-                labels={
-                    "value": map_value_label,
-                    "unit": "Unité",
-                },
-                title=f"{map_value_label} — Afrique — {map_year}",
-                color_continuous_scale=[
-                    CORP["panel"],
-                    CORP["accent"],
-                ],
-            )
-
+                mapped_df, locations="iso3", locationmode="ISO-3", color="value",
+                scope="africa", hover_name="destination",
+                hover_data={"value": ":,.0f", "year": True, "unit": True,
+                            "source_name": True, "quality_flag": True, "iso3": False},
+                labels={"value": map_unit_label, "unit": "Unité"},
+                title=f"{map_indicator_label} — {map_year} — {map_unit_label}",
+                color_continuous_scale=[CORP["panel"], CORP["accent"]])
             fig.update_layout(
-    # Marges autour de la carte
-    margin=dict(
-        l=10,
-        r=10,
-        t=70,
-        b=10,
-    ),
-
-    # Même fond que le dashboard
-    paper_bgcolor=CORP["bg"],
-    plot_bgcolor=CORP["bg"],
-
-    # Couleur générale des textes Plotly
-    font=dict(
-        color=CORP["text"],
-        size=13,
-    ),
-
-    # Titre de la carte
-    title=dict(
-        text=f"{map_value_label} — Afrique — {map_year}",
-        font=dict(
-            color=CORP["text"],
-            size=20,
-        ),
-        x=0.01,
-        xanchor="left",
-    ),
-
-    # Légende de l'échelle de couleurs
-    coloraxis_colorbar=dict(
-        title=dict(
-            text=map_value_label,
-            font=dict(
-                color=CORP["text"],
-            ),
-        ),
-        tickfont=dict(
-            color=CORP["text"],
-        ),
-    ),
-)
-
-            fig.update_geos(
-                bgcolor=CORP["bg"],
-                showcoastlines=True,
-                showland=True,
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-            )
-
-            st.caption(
-                "La couleur traduit uniquement les valeurs effectivement présentes "
-                "dans le dataset pour l'année sélectionnée. Un pays non renseigné "
-                "n'est pas interprété comme ayant une valeur égale à zéro."
-            )
-
-        # ----------------------------------------------------------------------
-        # 6. Tableau des données cartographiées
-        # ----------------------------------------------------------------------
-        st.write("### Données cartographiées")
-
-        map_display = (
-            map_df[
-                ["destination", "value", "unit"]
-            ]
-            .sort_values("value", ascending=False)
-            .rename(
-                columns={
-                    "destination": "Destination",
-                    "value": "Valeur",
-                    "unit": "Unité",
-                }
-            )
-        )
-
-        st.dataframe(
-            map_display,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        # ----------------------------------------------------------------------
-        # 7. Export CSV
-        # ----------------------------------------------------------------------
-        map_export = map_df[
-            ["destination", "value", "unit"]
-        ].sort_values("value", ascending=False)
-
+                margin=dict(l=10, r=10, t=70, b=10),
+                paper_bgcolor=CORP["bg"], plot_bgcolor=CORP["bg"],
+                font=dict(color=CORP["text"], size=13),
+                title=dict(x=0.01, xanchor="left", font=dict(color=CORP["text"], size=20)))
+            fig.update_geos(bgcolor=CORP["bg"], showcoastlines=True, showland=True)
+            st.plotly_chart(fig, width="stretch")
+        st.write("### Données du périmètre cartographique")
+        map_display = map_df[["destination", "year", "value", "unit", "source_name", "quality_flag"]].copy()
+        st.dataframe(map_display, width="stretch", hide_index=True)
+        map_export = map_df.rename(columns={"dataset_layer": "indicator"}).copy()
         map_csv = map_export.to_csv(index=False).encode("utf-8")
-
         st.download_button(
-            label="Télécharger les données cartographiées en CSV",
-            data=map_csv,
-            file_name=f"carte_{map_layer}_{map_year}.csv",
-            mime="text/csv",
-            key="download_map",
-        )
+            "Télécharger les données du périmètre en CSV", data=map_csv,
+            file_name=f"carte_{map_layer}_{map_year}.csv", mime="text/csv", key="download_map")
