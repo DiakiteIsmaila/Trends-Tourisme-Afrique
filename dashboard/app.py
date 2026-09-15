@@ -492,150 +492,154 @@ with tab_trends:
     trend_options = {
         "Arrivées touristiques internationales": ("arrivals", "Personnes"),
         "Recettes touristiques": ("receipts", "USD courants"),
-        "Ratio recettes / arrivées": ("ratio", "USD courants par arrivée"),
     }
     indicator_label = trend_indicator_filters.selectbox(
         "Indicateur", list(trend_options), key="trend_indicator")
     selected_layer, trend_unit = trend_options[indicator_label]
-    trend_view = trend_indicator_filters.selectbox(
-        "Vue", ["Niveaux dans le temps", "Variation annuelle", "Comparaison des destinations"],
-        key="trend_view")
     trends_df = national_series(df, selected_layer)
     year_min, year_max = int(trends_df.year.min()), int(trends_df.year.max())
     year_range = trend_period_filters.slider(
         "Période", min_value=year_min, max_value=year_max,
         value=(year_min, year_max), key="trend_year_range")
     st.caption(
-        f"Périmètre actif : {', '.join(selected_destinations) or 'Aucune destination sélectionnée'} | "
-        f"{indicator_label} | {trend_unit} | {year_range[0]}–{year_range[1]}.")
-    st.caption(
         "Recettes et ratio en USD courants, sans correction d'inflation. Le ratio est agrégé. "
         "Les variations sont descriptives, sans causalité. Les absences ne sont jamais des zéros. "
         "Les données nationales s'arrêtent au plus tard en 2020 : aucune reprise post-Covid calculée.")
 
-    if not selected_destinations:
-        st.info("Aucune donnée disponible : sélectionnez une destination.")
-    else:
-        filtered_trends = trends_df.loc[
-            trends_df.destination.isin(selected_destinations)
-            & trends_df.year.between(*year_range)].copy()
-        export_df = filtered_trends[["destination", "year", "value", "unit"]].copy()
-        if trend_view == "Comparaison des destinations":
-            comparison_dimension = trend_indicator_filters.selectbox(
-                "Dimension comparée", ["Niveaux 2019", "Variation annuelle médiane pré-2020",
-                                       "Volatilité pré-2020"], key="trend_comparison")
-            st.caption("Cette comparaison utilise son périmètre commun indiqué ci-dessous ; le filtre de période ne s'y applique pas.")
-            if comparison_dimension == "Niveaux 2019":
-                view_data = trends_df.loc[trends_df.destination.isin(selected_destinations) & trends_df.year.eq(2019)].copy()
-                field, axis_title = "value", trend_unit
-                st.write(f"**Niveaux nationaux — 2019 — {trend_unit}**")
-                export_df = view_data[["destination", "year", "value", "unit"]].copy()
-                if view_data.value.notna().sum() != len(selected_destinations):
-                    st.warning("Données insuffisantes pour comparer toutes les destinations sélectionnées en 2019.")
-            elif selected_layer == "ratio":
-                view_data = pd.DataFrame()
-                st.info("La dynamique et la volatilité validées concernent les arrivées et les recettes. Sélectionnez l'un de ces indicateurs.")
+    analysis_tabs = st.tabs(["Évolution", "Variation annuelle", "Ratio recettes / arrivées", "Comparaison"])
+    for analysis_index, analysis_tab in enumerate(analysis_tabs):
+        with analysis_tab:
+            selected_layer, trend_unit = trend_options[indicator_label]
+            trend_view = ["Niveaux dans le temps", "Variation annuelle", "Niveaux dans le temps", "Comparaison des destinations"][analysis_index]
+            if analysis_index == 2:
+                selected_layer, trend_unit = "ratio", "USD courants par arrivée"
+                st.caption("Le ratio combine arrivées et recettes : le filtre Indicateur ne s'applique pas ici. Ratio agrégé, ni dépense individuelle, ni rentabilité, ni qualité.")
+            trends_df = national_series(df, selected_layer)
+            applied_period = "2019 (niveaux) ; 1998–2019 (statistiques)" if analysis_index == 3 else f"{year_range[0]}–{year_range[1]}"
+            applied_indicator = "Ratio recettes / arrivées" if analysis_index == 2 else indicator_label
+            st.caption(f"Périmètre actif : {', '.join(selected_destinations)} | {applied_indicator} | {trend_unit} | {applied_period}.")
+            if not selected_destinations:
+                st.info("Aucune donnée disponible : sélectionnez une destination.")
             else:
-                summary, common_years = common_pre2020_summary(df, selected_destinations)
-                view_data = summary.loc[summary.indicator.eq(selected_layer)].copy()
-                field = "median_pct" if comparison_dimension.startswith("Variation") else "volatility_points"
-                axis_title = "%" if field == "median_pct" else "Points de pourcentage"
-                if common_years:
-                    st.write(f"**Années de variation communes : {', '.join(map(str, common_years))}**")
-                    st.caption(
-                        f"{len(common_years)} variations par série ; mêmes années pour arrivées et recettes. "
-                        "Médiane annuelle distincte du CAGR ; volatilité = écart-type échantillonnal, sans prédiction de risque.")
-                view_data["annees_communes"] = ", ".join(map(str, common_years))
-                export_df = view_data.copy()
-            if not view_data.empty:
-                plot_data = view_data.loc[view_data[field].notna()]
-                if not plot_data.empty:
-                    chart = alt.Chart(plot_data).mark_bar().encode(
-                        y=alt.Y("destination:N", title="Destination", sort="-x"),
-                        x=alt.X(f"{field}:Q", title=axis_title),
-                        tooltip=["destination:N", alt.Tooltip(f"{field}:Q", format=",.2f")])
-                    st.altair_chart(chart, width="stretch")
+                filtered_trends = trends_df.loc[
+                    trends_df.destination.isin(selected_destinations)
+                    & trends_df.year.between(*year_range)].copy()
+                export_df = filtered_trends[["destination", "year", "value", "unit"]].copy()
+                if trend_view == "Comparaison des destinations":
+                    comparison_dimension = st.radio(
+                        "Dimension comparée", ["Niveaux 2019", "Variation annuelle médiane pré-2020",
+                                               "Volatilité pré-2020"], key="trend_comparison")
+                    st.caption("Cette comparaison utilise son périmètre commun indiqué ci-dessous ; le filtre de période ne s'y applique pas.")
+                    if comparison_dimension == "Niveaux 2019":
+                        view_data = trends_df.loc[trends_df.destination.isin(selected_destinations) & trends_df.year.eq(2019)].copy()
+                        field, axis_title = "value", trend_unit
+                        st.write(f"**Niveaux nationaux — 2019 — {trend_unit}**")
+                        export_df = view_data[["destination", "year", "value", "unit"]].copy()
+                        if view_data.value.notna().sum() != len(selected_destinations):
+                            st.warning("Données insuffisantes pour comparer toutes les destinations sélectionnées en 2019.")
+                    elif selected_layer == "ratio":
+                        view_data = pd.DataFrame()
+                        st.info("La dynamique et la volatilité validées concernent les arrivées et les recettes. Sélectionnez l'un de ces indicateurs.")
+                    else:
+                        summary, common_years = common_pre2020_summary(df, DESTINATION_ORDER)
+                        view_data = summary.loc[summary.indicator.eq(selected_layer) & summary.destination.isin(selected_destinations)].copy()
+                        field = "median_pct" if comparison_dimension.startswith("Variation") else "volatility_points"
+                        axis_title = "%" if field == "median_pct" else "Points de pourcentage"
+                        if common_years:
+                            st.write(f"**Années de variation communes : {', '.join(map(str, common_years))}**")
+                            st.caption(
+                                f"{len(common_years)} variations par série ; mêmes années pour arrivées et recettes. "
+                                "Médiane annuelle distincte du CAGR ; volatilité = écart-type échantillonnal, sans prédiction de risque.")
+                        view_data["annees_communes"] = ", ".join(map(str, common_years))
+                        export_df = view_data.copy()
+                    if not view_data.empty:
+                        plot_data = view_data.loc[view_data[field].notna()]
+                        if not plot_data.empty:
+                            chart = alt.Chart(plot_data).mark_bar().encode(
+                                y=alt.Y("destination:N", title="Destination", sort="-x"),
+                                x=alt.X(f"{field}:Q", title=axis_title),
+                                tooltip=["destination:N", alt.Tooltip(f"{field}:Q", format=",.2f")])
+                            st.altair_chart(chart, width="stretch")
+                        else:
+                            st.info("Données insuffisantes pour cette comparaison.")
+                        st.dataframe(view_data, width="stretch", hide_index=True)
+                    else:
+                        export_df = pd.DataFrame()
                 else:
-                    st.info("Données insuffisantes pour cette comparaison.")
-                st.dataframe(view_data, width="stretch", hide_index=True)
-            else:
-                export_df = pd.DataFrame()
-        else:
-            if trend_view == "Variation annuelle" and selected_layer == "ratio":
-                st.info("Les variations annuelles proposées concernent les arrivées ou les recettes, pas le ratio.")
-                export_df = pd.DataFrame()
-            else:
-                if trend_view == "Variation annuelle":
-                    # Compute before period filtering so t-1 remains available at the left boundary.
-                    changes = annual_variations(trends_df)
-                    view_data = changes.loc[changes.destination.isin(selected_destinations) & changes.year.between(*year_range)].copy()
-                    field, axis_title = "variation_pct", "Variation annuelle (%)"
-                    export_df = view_data[["destination", "year", "value", "unit", "variation_pct"]].copy()
-                    plot_data = view_data.loc[view_data[field].notna()].copy()
-                    plot_data["periode"] = plot_data.year.eq(2020).map({True: "2020 — rupture exceptionnelle", False: "Autres années"})
-                    if not plot_data.empty:
-                        chart = alt.Chart(plot_data).mark_circle(size=70).encode(
-                            x=alt.X("year:Q", title="Année de fin", axis=alt.Axis(format="d")),
-                            y=alt.Y("variation_pct:Q", title=axis_title),
-                            color=alt.Color("destination:N", title="Destination"),
-                            shape=alt.Shape("periode:N", title="Période"),
-                            tooltip=["destination:N", "year:O", "periode:N", alt.Tooltip("variation_pct:Q", format=".2f")])
-                    st.caption("2020 : rupture exceptionnelle, identifiée séparément. Calcul uniquement entre années consécutives renseignées, avec une base strictement positive.")
-                else:
-                    view_data = filtered_trends
-                    plot_data = consecutive_segments(view_data)
-                    if not plot_data.empty:
-                        chart = alt.Chart(plot_data).mark_line(point=True).encode(
-                            x=alt.X("year:Q", title="Année", axis=alt.Axis(format="d")),
-                            y=alt.Y("value:Q", title=trend_unit),
-                            color=alt.Color("destination:N", title="Destination"),
-                            detail="segment:N", order="year:Q",
-                            tooltip=["destination:N", "year:O", alt.Tooltip("value:Q", format=",.2f"), "unit:N"])
-                if not plot_data.empty:
-                    st.altair_chart(chart, width="stretch")
-                else:
-                    st.info("Aucune valeur calculable pour cette sélection.")
-                st.dataframe(export_df, width="stretch", hide_index=True)
-        if not export_df.empty:
-            # Enrich only the CSV; displayed tables and calculations are unchanged.
-            export_metadata = ["metric", "metric_type", "source_name", "source_reference",
-                               "quality_flag", "coverage_scope"]
-            if trend_view == "Comparaison des destinations" and comparison_dimension != "Niveaux 2019":
-                export_df = export_df[["destination", "indicator", field, "observations", "annees_communes"]].copy()
-                export_df["unit"] = "%" if field == "median_pct" else "percentage_points"
-                export_df["reference_start_year"] = min(common_years) if common_years else None
-                export_df["reference_end_year"] = max(common_years) if common_years else None
-                reference_years = set(common_years) | {year - 1 for year in common_years}
-                reference = df.loc[df.dataset_layer.eq(selected_layer) & df.year.isin(reference_years)]
-                metadata = reference.groupby("destination")[export_metadata].agg(
-                    lambda values: " | ".join(sorted(set(values.dropna().astype(str))))).reset_index()
-                export_df = export_df.merge(metadata, on="destination", how="left", validate="one_to_one")
-            elif selected_layer == "ratio":
-                export_df = trends_df.merge(
-                    export_df[["destination", "year"]], on=["destination", "year"],
-                    how="inner", validate="one_to_one"
-                )[["destination", "year", "receipts", "arrivals", "value", "unit"]].rename(
-                    columns={"value": "ratio_receipts_per_arrival"})
-                export_df["indicator"] = "receipts_per_arrival"
-                for source_layer in ["arrivals", "receipts"]:
-                    metadata = df.loc[df.dataset_layer.eq(source_layer),
-                                      ["destination", "year"] + export_metadata].rename(
-                        columns={column: f"{column}_{source_layer}" for column in export_metadata})
-                    export_df = export_df.merge(metadata, on=["destination", "year"], how="left", validate="one_to_one")
-            else:
-                export_df = export_df.copy()
-                export_df["indicator"] = selected_layer
-                metadata = df.loc[df.dataset_layer.eq(selected_layer),
-                                  ["destination", "year"] + export_metadata]
-                export_df = export_df.merge(metadata, on=["destination", "year"], how="left", validate="one_to_one")
-                if "variation_pct" in export_df:
-                    export_df["variation_unit"] = "%"
-            st.download_button(
-                "Télécharger les données affichées en CSV",
-                data=export_df.to_csv(index=False).encode("utf-8"),
-                file_name=f"tendances_{selected_layer}_{safe_filename(trend_view)}.csv",
-                mime="text/csv", key="download_trends")
-
+                    if trend_view == "Variation annuelle" and selected_layer == "ratio":
+                        st.info("Les variations annuelles proposées concernent les arrivées ou les recettes, pas le ratio.")
+                        export_df = pd.DataFrame()
+                    else:
+                        if trend_view == "Variation annuelle":
+                            # Compute before period filtering so t-1 remains available at the left boundary.
+                            changes = annual_variations(trends_df)
+                            view_data = changes.loc[changes.destination.isin(selected_destinations) & changes.year.between(*year_range)].copy()
+                            field, axis_title = "variation_pct", "Variation annuelle (%)"
+                            export_df = view_data[["destination", "year", "value", "unit", "variation_pct"]].copy()
+                            plot_data = view_data.loc[view_data[field].notna()].copy()
+                            plot_data["periode"] = plot_data.year.eq(2020).map({True: "2020 — rupture exceptionnelle", False: "Autres années"})
+                            if not plot_data.empty:
+                                chart = alt.Chart(plot_data).mark_circle(size=70).encode(
+                                    x=alt.X("year:Q", title="Année de fin", axis=alt.Axis(format="d")),
+                                    y=alt.Y("variation_pct:Q", title=axis_title),
+                                    color=alt.Color("destination:N", title="Destination"),
+                                    shape=alt.Shape("periode:N", title="Période"),
+                                    tooltip=["destination:N", "year:O", "periode:N", alt.Tooltip("variation_pct:Q", format=".2f")])
+                            st.caption("2020 : rupture exceptionnelle, identifiée séparément. Calcul uniquement entre années consécutives renseignées, avec une base strictement positive.")
+                        else:
+                            view_data = filtered_trends
+                            plot_data = consecutive_segments(view_data)
+                            if not plot_data.empty:
+                                chart = alt.Chart(plot_data).mark_line(point=True).encode(
+                                    x=alt.X("year:Q", title="Année", axis=alt.Axis(format="d")),
+                                    y=alt.Y("value:Q", title=trend_unit),
+                                    color=alt.Color("destination:N", title="Destination"),
+                                    detail="segment:N", order="year:Q",
+                                    tooltip=["destination:N", "year:O", alt.Tooltip("value:Q", format=",.2f"), "unit:N"])
+                        if not plot_data.empty:
+                            st.altair_chart(chart, width="stretch")
+                        else:
+                            st.info("Aucune valeur calculable pour cette sélection.")
+                        st.dataframe(export_df, width="stretch", hide_index=True)
+                if not export_df.empty:
+                    # Enrich only the CSV; displayed tables and calculations are unchanged.
+                    export_metadata = ["metric", "metric_type", "source_name", "source_reference",
+                                       "quality_flag", "coverage_scope"]
+                    if trend_view == "Comparaison des destinations" and comparison_dimension != "Niveaux 2019":
+                        export_df = export_df[["destination", "indicator", field, "observations", "annees_communes"]].copy()
+                        export_df["unit"] = "%" if field == "median_pct" else "percentage_points"
+                        export_df["reference_start_year"] = min(common_years) if common_years else None
+                        export_df["reference_end_year"] = max(common_years) if common_years else None
+                        reference_years = set(common_years) | {year - 1 for year in common_years}
+                        reference = df.loc[df.dataset_layer.eq(selected_layer) & df.year.isin(reference_years)]
+                        metadata = reference.groupby("destination")[export_metadata].agg(
+                            lambda values: " | ".join(sorted(set(values.dropna().astype(str))))).reset_index()
+                        export_df = export_df.merge(metadata, on="destination", how="left", validate="one_to_one")
+                    elif selected_layer == "ratio":
+                        export_df = trends_df.merge(
+                            export_df[["destination", "year"]], on=["destination", "year"],
+                            how="inner", validate="one_to_one"
+                        )[["destination", "year", "receipts", "arrivals", "value", "unit"]].rename(
+                            columns={"value": "ratio_receipts_per_arrival"})
+                        export_df["indicator"] = "receipts_per_arrival"
+                        for source_layer in ["arrivals", "receipts"]:
+                            metadata = df.loc[df.dataset_layer.eq(source_layer),
+                                              ["destination", "year"] + export_metadata].rename(
+                                columns={column: f"{column}_{source_layer}" for column in export_metadata})
+                            export_df = export_df.merge(metadata, on=["destination", "year"], how="left", validate="one_to_one")
+                    else:
+                        export_df = export_df.copy()
+                        export_df["indicator"] = selected_layer
+                        metadata = df.loc[df.dataset_layer.eq(selected_layer),
+                                          ["destination", "year"] + export_metadata]
+                        export_df = export_df.merge(metadata, on=["destination", "year"], how="left", validate="one_to_one")
+                        if "variation_pct" in export_df:
+                            export_df["variation_unit"] = "%"
+                    st.download_button(
+                        "Télécharger les données affichées en CSV",
+                        data=export_df.to_csv(index=False).encode("utf-8"),
+                        file_name=f"tendances_{selected_layer}_{safe_filename(trend_view)}.csv",
+                        mime="text/csv", key=f"download_trends_{analysis_index}")
 
 # ==============================================================================
 # ONGLET 2 — PROVENANCE
@@ -652,11 +656,21 @@ with tab_origin:
     selected_origin_destination = origin_filters.selectbox(
         "Destination", ordered_destinations(provenance_df.destination), key="origin_destination")
     destination_df = provenance_df.loc[provenance_df.destination.eq(selected_origin_destination)].copy()
+    origin_years = sorted(destination_df.year.unique(), reverse=True)
+    if st.session_state.get("origin_year") not in origin_years:
+        st.session_state["origin_year"] = origin_years[0]
     selected_origin_year = origin_filters.selectbox(
-        "Année", sorted(destination_df.year.unique(), reverse=True), key="origin_year")
+        "Année", origin_years, key="origin_year")
     origin_filtered = destination_df.loc[destination_df.year.eq(selected_origin_year)].copy()
+    origin_categories = ["Toutes les catégories"] + sorted(destination_df.granularity.unique())
+    if st.session_state.get("origin_category") not in origin_categories:
+        st.session_state["origin_category"] = origin_categories[0]
+    selected_origin_category = origin_filters.selectbox(
+        "Catégorie", origin_categories, key="origin_category")
+    if selected_origin_category != origin_categories[0]:
+        origin_filtered = origin_filtered.loc[origin_filtered.granularity.eq(selected_origin_category)].copy()
     origin_group_columns = ["granularity", "metric_type", "unit", "coverage_scope"]
-    st.caption(f"Périmètre actif : {selected_origin_destination} | {selected_origin_year}.")
+    st.caption(f"Périmètre actif : {selected_origin_destination} | {selected_origin_year} | {selected_origin_category}.")
     st.caption(
         "Les marchés ne sont comparés qu'au sein d'une même année, granularité, mesure et couverture. "
         "Aucun classement entre destinations. Une valeur absente n'est pas un zéro.")
@@ -731,6 +745,8 @@ with tab_origin:
             destination_df.year.eq(2019) & destination_df.granularity.eq("regional_aggregate")
             & destination_df.unit.eq("share")
             & destination_df.metric_type.isin(["regional_tourist_share", "regional_tourist_nights_share"])].copy()
+        if selected_origin_category not in [origin_categories[0], "regional_aggregate"]:
+            egypt_regions = egypt_regions.iloc[:0].copy()
         render_origin_groups(egypt_regions, "### Parts régionales — 2019 uniquement")
     else:
         render_origin_groups(origin_filtered, "### Données par groupes comparables")
