@@ -73,19 +73,6 @@ st.markdown(
            TEXTE GÉNÉRAL
            ============================================================== */
 
-        html,
-        body,
-        [class*="css"],
-        .stApp,
-        .stApp p,
-        .stApp span,
-        .stApp label,
-        .stApp li,
-        .stApp div {{
-            color: {CORP["text"]};
-        }}
-
-
         /* ==============================================================
            TITRES
            ============================================================== */
@@ -114,22 +101,6 @@ st.markdown(
         /* ==============================================================
            SELECTBOX / MULTISELECT / INPUTS
            ============================================================== */
-
-        [data-baseweb="select"] > div {{
-            background-color: #ffffff !important;
-            color: {CORP["text"]} !important;
-        }}
-
-        [data-baseweb="select"] span,
-        [data-baseweb="select"] div {{
-            color: {CORP["text"]} !important;
-        }}
-
-        [data-baseweb="input"] input {{
-            color: {CORP["text"]} !important;
-            background-color: #ffffff !important;
-        }}
-
 
         /* ==============================================================
            SLIDER
@@ -306,6 +277,143 @@ METRIC_TYPE_LABELS = {
     "regional_tourist_share": "Part des touristes",
     "regional_tourist_nights_share": "Part des nuitées",
 }
+
+
+
+def build_annual_change_comment(points, displayed, indicator_label):
+    """Resolve a unique business key against the current plotted observations."""
+    if not isinstance(points, list) or len(points) != 1:
+        return None
+    point = points[0]
+    if not isinstance(point, dict) or point.get("display_indicator") != indicator_label:
+        return None
+    rows = displayed.loc[
+        displayed.destination.eq(point.get("destination"))
+        & displayed.year.eq(point.get("year"))
+        & displayed.variation_pct.notna()
+    ]
+    if len(rows) != 1:
+        return None
+    row = rows.iloc[0]
+    year, change = int(row.year), float(row.variation_pct)
+    direction = "en hausse" if change > 0 else "en baisse" if change < 0 else "stable"
+    formatted = f"{change:+.2f}".replace(".", ",").replace("-", "−")
+    text = (
+        f"**{row.destination} · {year}**\n\n"
+        f"Variation annuelle — {indicator_label} : **{formatted} % par rapport à {year - 1}.**\n\n"
+        f"Le niveau est {direction} par rapport à l'année précédente."
+    )
+    if row.unit == "current_USD":
+        text += "\n\nLes recettes sont exprimées en USD courants, sans correction de l'inflation."
+    if year == 2020:
+        text += (
+            "\n\nCette observation fait partie de la rupture de 2020 visible dans les séries disponibles."
+            "\n\nLe dataset actuel ne contient pas suffisamment d'observations nationales "
+            "postérieures à 2020 pour mesurer une reprise post-Covid."
+        )
+    return text
+
+
+
+def build_comparison_comment(points, displayed, field):
+    """Interpret only a unique bar present in the active comparison."""
+    if not isinstance(points, list) or len(points) != 1 or not isinstance(points[0], dict):
+        return None
+    rows = displayed
+    for key in ["destination", "display_dimension", "display_period"]:
+        rows = rows.loc[rows[key].eq(points[0].get(key))]
+    rows = rows.loc[rows[field].notna()]
+    if len(rows) != 1:
+        return None
+    row = rows.iloc[0]
+    value = float(row[field])
+    if field == "value":
+        if row.unit == "current_USD":
+            divisor, unit = ((1e9, "Md USD courants") if abs(value) >= 1e9
+                             else (1e6, "M USD courants") if abs(value) >= 1e6
+                             else (1, "USD courants"))
+            formatted = f"{value / divisor:,.3f} {unit}"
+        else:
+            formatted = f"{value:,.0f} personnes"
+        noun = "valeur"
+    elif field == "median_pct":
+        formatted, noun = f"{value:+.2f} %", "médiane"
+    else:
+        formatted, noun = f"{value:.2f} points de pourcentage", "volatilité"
+    formatted = formatted.replace(",", " ").replace(".", ",").replace("-", "−")
+    text = (f"**{row.destination} · {row.display_period}**\n\n"
+            f"{row.display_dimension} : **{formatted}.**")
+    if field != "value" and pd.notna(row.get("observations")):
+        text += f"\n\nNombre d’observations : {int(row.observations)}."
+    if field == "volatility_points":
+        text += "\n\nUne volatilité plus élevée traduit des variations annuelles plus dispersées sur la période."
+    panel = displayed.loc[
+        displayed.display_dimension.eq(row.display_dimension)
+        & displayed.display_period.eq(row.display_period) & displayed[field].notna()
+    ]
+    if len(panel) >= 2 and not panel.destination.duplicated().any():
+        for extreme, adjective in [(panel[field].max(), "élevée"), (panel[field].min(), "faible")]:
+            if value == extreme and panel[field].eq(extreme).sum() == 1:
+                text += (f"\n\nParmi les destinations actuellement affichées disposant d’une observation "
+                         f"sur {row.display_period}, cette {noun} est la plus {adjective}.")
+                break
+    return text
+
+
+
+ORIGIN_SELECTION_FIELDS = [
+    "destination", "year", "origin_name", "granularity", "metric", "metric_type",
+    "unit", "coverage_scope", "quality_flag",
+]
+
+
+def build_origin_comment(points, displayed):
+    """Explain one observed provenance row, without ranking unlike scopes."""
+    if not isinstance(points, list) or len(points) != 1 or not isinstance(points[0], dict):
+        return None
+    rows = displayed
+    for key in ORIGIN_SELECTION_FIELDS:
+        if key not in points[0]:
+            return None
+        rows = rows.loc[rows[key].eq(points[0][key])]
+    rows = rows.loc[rows.value.notna()]
+    if len(rows) != 1:
+        return None
+    row = rows.iloc[0]
+    granularity = {"country": "pays", "regional_aggregate": "agrégat régional",
+                   "institutional_category": "catégorie institutionnelle",
+                   "diaspora": "diaspora", "aggregate_total": "total agrégé"}.get(row.granularity, row.granularity)
+    label = {"regional_tourist_share": "Part des touristes",
+             "regional_tourist_nights_share": "Part des nuitées"}.get(
+                 row.metric_type, "Part publiée pour ce marché" if row.unit == "share"
+                 else "Arrivées enregistrées pour cette origine")
+    value = (f"{row.value * 100:.2f} %" if row.unit == "share" else f"{row.value:,.0f} personnes")
+    value = value.replace(",", " ").replace(".", ",")
+    notes = []
+    panel = {"exact_top30": "Top 30 disponible", "exact_main7": "panel de 7 marchés retenus",
+             "exact_panel18": "panel de 18 marchés disponible", "survey_share_top15": "Top 15 disponible"}.get(row.quality_flag)
+    if panel:
+        notes.append(f"Cette observation appartient au {panel}, sans couverture exhaustive.")
+    if row.destination == "Tanzanie":
+        notes.append("Il s’agit d’une part publiée, pas d’un volume exact d’arrivées ; les parts ne sont pas renormalisées à 100 %.")
+    if row.origin_name == "Scandinaves":
+        notes.append("Scandinaves est traité comme un agrégat régional et non comme un pays. Sa composition exacte reste à vérifier.")
+    if row.granularity == "institutional_category":
+        notes.append("Cette observation correspond à une catégorie institutionnelle et non à un pays.")
+    if row.destination == "Maurice" and row.origin_name in ["Reunion Island", "Réunion", "Reunion"]:
+        notes.append("Réunion reste un marché distinct de France.")
+    if row.destination == "Égypte":
+        if row.granularity == "country":
+            label = "Observation du marché États-Unis disponible dans le dataset"
+        notes.append("La couverture égyptienne ne permet pas un classement global des marchés d’origine.")
+        if row.granularity == "regional_aggregate":
+            notes.append("Panneau régional fixé à 2019 ; parts des touristes et parts des nuitées restent distinctes.")
+    if not notes:
+        notes.append("L’observation décrit uniquement le périmètre publié ; ne pas additionner agrégats et composantes.")
+    return (f"**{row.destination} · {row.origin_name} · {int(row.year)}**\n\n"
+            f"{label} : **{value}.**\n\n"
+            f"Granularité : **{granularity}**  \nCouverture : **{row.coverage_scope}**\n\n"
+            + " ".join(notes))
 
 
 def format_display_value(value: float, unit: str) -> str:
@@ -555,11 +663,34 @@ with tab_trends:
                     if not view_data.empty:
                         plot_data = view_data.loc[view_data[field].notna()]
                         if not plot_data.empty:
+                            plot_data = plot_data.assign(display_dimension=f"{indicator_label} — {comparison_dimension}",
+                                                         display_period="2019" if field == "value" else f"{min(common_years)}–{max(common_years)}",
+                                                         display_unit=axis_title)
                             chart = alt.Chart(plot_data).mark_bar().encode(
                                 y=alt.Y("destination:N", title="Destination", sort="-x"),
                                 x=alt.X(f"{field}:Q", title=axis_title),
-                                tooltip=["destination:N", alt.Tooltip(f"{field}:Q", format=",.2f")])
-                            st.altair_chart(chart, width="stretch")
+                                tooltip=[alt.Tooltip("destination:N", title="Destination"),
+                                         alt.Tooltip("display_dimension:N", title="Dimension"),
+                                         alt.Tooltip("display_period:N", title="Année" if field == "value" else "Période"),
+                                         alt.Tooltip(f"{field}:Q", title="Valeur", format=",.2f"),
+                                         alt.Tooltip("display_unit:N", title="Unité")]
+                                        + ([alt.Tooltip("observations:Q", title="Nombre d’observations", format="d")] if field != "value" else []))
+                            bar_selection = alt.selection_point(
+                                name="comparison_bar", fields=["destination", "display_dimension", "display_period"],
+                                on="click", toggle=False, clear="dblclick")
+                            chart = chart.add_params(bar_selection).encode(
+                                opacity=alt.condition(bar_selection, alt.value(1), alt.value(0.45)))
+                            event = st.altair_chart(
+                                chart, width="stretch", key="comparison_chart",
+                                on_select="rerun", selection_mode=["comparison_bar"])
+                            comment = build_comparison_comment(
+                                event.get("selection", {}).get("comparison_bar", []), plot_data, field)
+                            if comment:
+                                with st.container(border=True):
+                                    st.markdown("### Lecture du graphique")
+                                    st.markdown(comment)
+                            else:
+                                st.caption("Cliquez sur une barre pour afficher son interprétation.")
                         else:
                             st.info("Données insuffisantes pour cette comparaison.")
                         st.dataframe(view_data, width="stretch", hide_index=True)
@@ -579,25 +710,62 @@ with tab_trends:
                             plot_data = view_data.loc[view_data[field].notna()].copy()
                             plot_data["periode"] = plot_data.year.eq(2020).map({True: "2020 — rupture exceptionnelle", False: "Autres années"})
                             if not plot_data.empty:
+                                plot_data = plot_data.assign(display_indicator=indicator_label)
+                                first_year, last_year = int(plot_data.year.min()), int(plot_data.year.max())
+                                year_domain = ([first_year, last_year] if first_year != last_year
+                                               else [first_year - 0.5, last_year + 0.5])
+                                tick_step = max(1, (last_year - first_year + 6) // 7)
+                                year_ticks = list(range(first_year, last_year + 1, tick_step))
+                                if year_ticks[-1] != last_year:
+                                    year_ticks.append(last_year)
                                 chart = alt.Chart(plot_data).mark_circle(size=70).encode(
-                                    x=alt.X("year:Q", title="Année de fin", axis=alt.Axis(format="d")),
+                                    x=alt.X("year:Q", title="Année",
+                                            scale=alt.Scale(domain=year_domain, zero=False, nice=False),
+                                            axis=alt.Axis(format="d", values=year_ticks)),
                                     y=alt.Y("variation_pct:Q", title=axis_title),
                                     color=alt.Color("destination:N", title="Destination"),
                                     shape=alt.Shape("periode:N", title="Période"),
-                                    tooltip=["destination:N", "year:O", "periode:N", alt.Tooltip("variation_pct:Q", format=".2f")])
+                                    tooltip=[alt.Tooltip("destination:N", title="Destination"), alt.Tooltip("year:O", title="Année"),
+                                             alt.Tooltip("display_indicator:N", title="Indicateur"),
+                                             alt.Tooltip("variation_pct:Q", title="Variation annuelle (%)", format=".2f"),
+                                             alt.Tooltip("periode:N", title="Période")])
                             st.caption("2020 : rupture exceptionnelle, identifiée séparément. Calcul uniquement entre années consécutives renseignées, avec une base strictement positive.")
                         else:
                             view_data = filtered_trends
                             plot_data = consecutive_segments(view_data)
                             if not plot_data.empty:
+                                plot_data = plot_data.assign(display_indicator=applied_indicator,
+                                                             display_unit="USD courants / arrivée" if selected_layer == "ratio" else trend_unit)
                                 chart = alt.Chart(plot_data).mark_line(point=True).encode(
                                     x=alt.X("year:Q", title="Année", axis=alt.Axis(format="d")),
                                     y=alt.Y("value:Q", title=trend_unit),
                                     color=alt.Color("destination:N", title="Destination"),
                                     detail="segment:N", order="year:Q",
-                                    tooltip=["destination:N", "year:O", alt.Tooltip("value:Q", format=",.2f"), "unit:N"])
+                                    tooltip=[alt.Tooltip("destination:N", title="Destination"), alt.Tooltip("year:O", title="Année"),
+                                             alt.Tooltip("display_indicator:N", title="Indicateur"),
+                                             alt.Tooltip("value:Q", title="Ratio recettes / arrivées" if selected_layer == "ratio" else "Valeur", format=",.2f"),
+                                             alt.Tooltip("display_unit:N", title="Unité")])
                         if not plot_data.empty:
-                            st.altair_chart(chart, width="stretch")
+                            if trend_view == "Variation annuelle":
+                                point_selection = alt.selection_point(
+                                    name="annual_change_point",
+                                    fields=["destination", "year", "display_indicator"],
+                                    on="click", toggle=False, clear="dblclick")
+                                chart = chart.add_params(point_selection).encode(
+                                    opacity=alt.condition(point_selection, alt.value(1), alt.value(0.45)))
+                                event = st.altair_chart(
+                                    chart, width="stretch", key="annual_change_chart",
+                                    on_select="rerun", selection_mode=["annual_change_point"])
+                                comment = build_annual_change_comment(
+                                    event.get("selection", {}).get("annual_change_point", []), plot_data, indicator_label)
+                                if comment:
+                                    with st.container(border=True):
+                                        st.markdown("### Lecture du graphique")
+                                        st.markdown(comment)
+                                else:
+                                    st.caption("Cliquez sur un point pour afficher son interprétation.")
+                            else:
+                                st.altair_chart(chart, width="stretch")
                         else:
                             st.info("Aucune valeur calculable pour cette sélection.")
                         st.dataframe(export_df, width="stretch", hide_index=True)
@@ -722,13 +890,35 @@ with tab_origin:
             if not available.empty and chart_allowed:
                 available["display_value"] = available.value * 100 if unit == "share" else available.value
                 value_label = "Part publiée (%)" if unit == "share" else "Personnes" if unit == "persons" else unit
+                available = available.assign(display_unit="part (%)" if unit == "share" else "personnes",
+                    display_granularity={"country": "pays / territoire", "regional_aggregate": "agrégat régional",
+                                         "institutional_category": "catégorie institutionnelle", "diaspora": "diaspora",
+                                         "aggregate_total": "total agrégé"}.get(granularity, granularity))
                 chart = alt.Chart(available).mark_bar().encode(
                     x=alt.X("display_value:Q", title=value_label),
                     y=alt.Y("origin_name:N", title="Catégorie publiée", sort="-x"),
-                    tooltip=["origin_name:N", "year:O", alt.Tooltip("display_value:Q", title=value_label, format=",.2f"),
-                             "metric_type:N", "coverage_scope:N", "quality_flag:N"]
+                    tooltip=[alt.Tooltip("destination:N", title="Destination"), alt.Tooltip("origin_name:N", title="Origine"),
+                             alt.Tooltip("year:O", title="Année"), alt.Tooltip("display_value:Q", title="Valeur", format=",.2f"),
+                             alt.Tooltip("display_unit:N", title="Unité"), alt.Tooltip("display_granularity:N", title="Granularité"),
+                             alt.Tooltip("coverage_scope:N", title="Couverture")]
                 ).properties(height=max(180, min(800, len(available) * 28)))
-                st.altair_chart(chart, width="stretch")
+                origin_selection = alt.selection_point(
+                    name="origin_bar", fields=ORIGIN_SELECTION_FIELDS,
+                    on="click", toggle=False, clear="dblclick")
+                chart = chart.add_params(origin_selection).encode(
+                    opacity=alt.condition(origin_selection, alt.value(1), alt.value(0.45)))
+                event = st.altair_chart(
+                    chart, width="stretch",
+                    key=f"origin_chart_{heading}_{selected_origin_destination}_{identity!r}",
+                    on_select="rerun", selection_mode=["origin_bar"])
+                comment = build_origin_comment(
+                    event.get("selection", {}).get("origin_bar", []), available)
+                if comment:
+                    with st.container(border=True):
+                        st.markdown("### Lecture du graphique")
+                        st.markdown(comment)
+                else:
+                    st.caption("Cliquez sur une barre pour afficher son interprétation.")
             display_group = group[[
                 "destination", "year", "origin_name", "granularity", "metric_type",
                 "value", "unit", "coverage_scope", "quality_flag", "source_name", "source_reference", "notes"
@@ -823,11 +1013,12 @@ with tab_map:
             st.info("Aucune donnée cartographiable pour cette sélection.")
         else:
             fig = px.choropleth(
-                mapped_df, locations="iso3", locationmode="ISO-3", color="value",
+                mapped_df.assign(display_indicator=map_indicator_label, display_unit=map_unit_label), locations="iso3", locationmode="ISO-3", color="value",
                 scope="africa", hover_name="destination",
-                hover_data={"value": ":,.0f", "year": True, "unit": True,
-                            "source_name": True, "quality_flag": True, "iso3": False},
-                labels={"value": map_unit_label, "unit": "Unité"},
+                hover_data={"value": ":,.0f", "year": True, "display_unit": True, "display_indicator": True,
+                            "source_name": True, "iso3": False},
+                labels={"destination": "Destination", "year": "Année", "value": "Valeur",
+                        "display_unit": "Unité", "display_indicator": "Indicateur", "source_name": "Source"},
                 title=f"{map_indicator_label} — {map_year} — {map_unit_label}",
                 color_continuous_scale=[CORP["panel"], CORP["accent"]])
             fig.update_layout(

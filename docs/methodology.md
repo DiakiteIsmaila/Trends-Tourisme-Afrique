@@ -3,7 +3,7 @@
 
 **Projet :** Trends — Gaea21  
 **Document :** Référentiel méthodologique  
-**Dernière mise à jour :** 8 septembre 2026  
+**Dernière mise à jour :** 15 septembre 2026\
 **Statut :** Document vivant — à mettre à jour lorsqu'une règle de traitement ou de comparaison évolue.
 
 ---
@@ -287,18 +287,12 @@ Lorsque l'information n'est pas disponible ou pas suffisamment fiable :
 - la valeur reste manquante ;
 - elle n'est pas remplacée par zéro ;
 - elle n'est pas inventée ;
-- elle n'est pas interpolée automatiquement ;
+- elle n'est pas interpolée ;
 - la limite est documentée si elle affecte l'analyse.
 
 ## 9.3 Interpolation
 
-Aucune interpolation n'est appliquée par défaut.
-
-Une éventuelle interpolation future devrait être :
-- justifiée ;
-- documentée ;
-- séparée des données observées ;
-- identifiable par un indicateur de qualité.
+Aucune interpolation, fabrication ou reconstruction n'est appliquée dans le projet finalisé. Missing ≠ 0. Une évolution future de cette règle nécessiterait une décision méthodologique explicite et une séparation des estimations ; elle n'autorise aucun remplacement dans les données ou analyses actuelles.
 
 ## 9.4 Visualisation
 
@@ -648,9 +642,7 @@ L'année 2020 doit être analysée comme une rupture structurelle liée au conte
 
 ## 20.3 Reprise post-Covid
 
-La reprise peut être évaluée notamment par comparaison avec un niveau pré-Covid approprié.
-
-Toute définition de « retour au niveau pré-Covid » doit indiquer clairement l'année de référence.
+Les séries nationales s'arrêtent au plus tard en 2020 selon disponibilité ; elles ne fournissent pas d'observations suffisantes après 2020. Aucune mesure fiable de reprise nationale post-Covid n'est possible avec le dataset actuel. Les provenances récentes ne remplacent pas les totaux nationaux. Une analyse future exigerait un enrichissement documenté des séries nationales et une année de référence explicite.
 
 ## 20.4 Taux de variation
 
@@ -660,13 +652,13 @@ Formule générale :
 taux_variation = ((valeur_t - valeur_t-1) / valeur_t-1) × 100
 ```
 
-Le calcul n'est pas effectué lorsque la valeur de référence est manquante ou incompatible.
+Une variation annuelle n'est calculée que pour deux années strictement consécutives, la même destination et le même indicateur, avec deux valeurs renseignées et une base strictement positive. Aucune variation ne franchit un trou temporel. Les variations de recettes sont nominales, sans ajustement pour inflation.
 
 ---
 
 # 21. Analyse croisée arrivées × recettes
 
-Les arrivées et recettes peuvent être étudiées conjointement lorsqu'elles concernent la même destination et une période compatible.
+Les arrivées et recettes peuvent être étudiées conjointement uniquement pour la même destination et la même année, par jointure explicite sans duplication.
 
 Un indicateur dérivé tel que :
 
@@ -675,12 +667,13 @@ recettes / arrivées
 ```
 
 peut être calculé uniquement si :
-- les deux valeurs existent ;
-- les périodes correspondent ;
-- les unités sont connues ;
+- les deux observations sont présentes ;
+- la destination et l'année sont identiques ;
+- les arrivées sont strictement positives ;
+- les unités sont compatibles : personnes et USD courants ;
 - l'interprétation est explicitée.
 
-Cet indicateur est un ratio analytique. Il ne doit pas être automatiquement présenté comme une dépense individuelle exacte de chaque touriste.
+Terminologie : « recettes touristiques par arrivée » ou « ratio recettes / arrivées ». Le ratio est exprimé en USD courants par arrivée, sans correction d'inflation. Il ne représente ni dépense moyenne individuelle, ni revenu moyen par touriste, ni rentabilité, ni qualité touristique.
 
 ---
 
@@ -697,7 +690,7 @@ Une comparaison doit :
 7. contextualiser les résultats ;
 8. éviter les conclusions causales non démontrées.
 
-Une corrélation visuelle ou statistique n'est pas une preuve de causalité.
+Toute corrélation calculée dans l'EDA est descriptive ; aucune causalité ne doit en être déduite. Les tendances temporelles partagées et les différences entre destinations limitent notamment l'interprétation d'une corrélation groupée.
 
 ---
 
@@ -711,13 +704,13 @@ Le dashboard ne doit pas permettre à l'interface de faire disparaître les limi
 
 Les filtres doivent permettre de sélectionner les dimensions pertinentes sans créer de combinaison incohérente.
 
-La version cible suit le template Gaea21 avec les filtres principaux dans `st.sidebar`.
+Le dashboard finalisé suit le principe Gaea21 avec les filtres de données dans `st.sidebar`. Dans Tendances, les types d'analyse sont organisés en sous-onglets centraux. La comparaison distingue niveaux 2019, médiane et volatilité sur 1998–2019 ; le filtre de période ne s'applique pas à ces références fixes.
 
 ## 23.3 Tendances
 
 Les courbes :
 - utilisent uniquement les observations disponibles ;
-- ne remplacent pas les trous par zéro ;
+- ne remplacent pas les trous par zéro et ne relient pas deux années non consécutives ;
 - affichent l'unité appropriée ;
 - doivent être interprétées selon la période sélectionnée.
 
@@ -731,7 +724,7 @@ Affichage possible sous forme de volumes.
 
 ### Données `share`
 
-Conversion en pourcentage uniquement pour l'affichage.
+Conversion en pourcentage uniquement pour l'affichage. Pour la Tanzanie : parts publiées uniquement, aucune reconstruction en volumes et aucune renormalisation à 100 %. Le Top 15 reste partiel.
 
 ### Égypte
 
@@ -930,3 +923,11 @@ Le CSV est la source utilisée par les scripts. Le XLSX est synchronisé par rem
 Les sorties sont préparées en mémoire puis dans des fichiers temporaires, avec remplacement atomique par fichier et restauration en cas d'erreur d'écriture interceptée. Ce mécanisme n'est pas une transaction multi-fichiers résistante à une coupure système.
 
 Cette phase ne modifie ni l'EDA, ni le dashboard, ni les indicateurs analytiques.
+
+## Synchronisation de clôture — 15 septembre 2026
+
+EDA 01–12 et dashboard finalisés ; indicateurs sélectionnés. Les mentions datées de demandes anciennes dans l’historique ne sont pas des tâches ouvertes.
+
+Les comparaisons de provenance restent limitées aux périmètres compatibles ; Top-N et panels partiels sont signalés. Pays, agrégats régionaux, diasporas et catégories institutionnelles restent distincts. La couverture égyptienne ne permet aucun classement global des marchés.
+
+L’exploitation du maître, ses corrections documentées, l’EDA, les indicateurs et le dashboard sont reproductibles depuis le dataset final. La reconstruction intégrale depuis toutes les publications originales est NON AUTONOME avec le dépôt actuel : les sources/intermédiaires historiques ne sont pas présents dans data/raw/ ou data/processed/. Voir data_sources.md pour les références identifiées et les réserves restantes.

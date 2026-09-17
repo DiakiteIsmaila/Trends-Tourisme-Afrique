@@ -3,7 +3,7 @@
 
 **Projet :** Trends — Gaea21  
 **Document :** Registre de traçabilité des sources  
-**Dernière mise à jour :** 8 septembre 2026  
+**Dernière mise à jour :** 15 septembre 2026\
 **Statut :** Document vivant — les URL et dates d'accès non vérifiées restent explicitement signalées.
 
 ---
@@ -28,19 +28,21 @@ La chaîne de traçabilité retenue est :
 
 ---
 
+Les références institutionnelles ci-dessous sont consolidées à partir des références vérifiées fournies pour cette mise à jour et des métadonnées locales. Elles ne prouvent ni la date historique de collecte ni le rattachement de chaque valeur à une publication. Les archives historiques mentionnées ne sont pas actuellement présentes dans `data/raw/` ou `data/processed/`.
+
 ## 2. Synthèse des sources
 
 | ID | Dimension | Destination | Organisme / source | Période utilisée | Unité / type | Niveau de couverture |
 |---|---|---|---|---|---|---|
 | SRC-ARVL | Arrivées | 7 destinations | Banque mondiale — World Development Indicators | série harmonisée du projet | personnes | série internationale harmonisée |
 | SRC-RCPT | Recettes | 7 destinations | Banque mondiale — World Development Indicators | série harmonisée du projet | USD courants | série internationale harmonisée |
-| SRC-MAR | Provenance | Maroc | Source open data marocaine — référence exacte à confirmer dans l'archive de collecte | 2012–2020 | personnes | données par marché d'origine |
+| SRC-MAR | Provenance | Maroc | MTAESS — portail officiel data.gov.ma | 2012–2020 | personnes | données par marché d'origine |
 | SRC-TUN | Provenance | Tunisie | Office National du Tourisme Tunisien (ONTT) | 2017–2023 | personnes | arrivées aux frontières par nationalité |
-| SRC-KEN | Provenance | Kenya | Tourism Research Institute (TRI) — référence documentaire exacte à confirmer | 2022–2024 | personnes | Top 30 marchés |
-| SRC-TZA | Provenance | Tanzanie | National Bureau of Statistics (NBS) — référence documentaire exacte à confirmer | 2022–2024 | parts | Top 15 marchés |
-| SRC-MUS | Provenance | Maurice | Statistics Mauritius — référence documentaire exacte à confirmer | 2022–2024 | personnes | panel de 7 marchés |
-| SRC-ZAF | Provenance | Afrique du Sud | Statistics South Africa (Stats SA) — référence documentaire exacte à confirmer | 2022–2024 | personnes | panel de 18 marchés |
-| SRC-EGY | Provenance | Égypte | CAPMAS / publications statistiques égyptiennes utilisées lors de la collecte | 2010–2019 + agrégats 2019 | personnes / parts | couverture partielle |
+| SRC-KEN | Provenance | Kenya | Tourism Research Institute (TRI) — rapports 2022, 2023 et 2024 identifiés | 2022–2024 | personnes | Top 30 marchés |
+| SRC-TZA | Provenance | Tanzanie | NBS — International Visitors' Exit Survey Reports | 2022–2024 | parts | Top 15 marchés |
+| SRC-MUS | Provenance | Maurice | Statistics Mauritius — International Travel and Tourism | 2022–2024 | personnes | panel de 7 marchés |
+| SRC-ZAF | Provenance | Afrique du Sud | Stats SA — collections P0351 et P0350 ; tables du panel à consolider | 2022–2024 | personnes | panel de 18 marchés |
+| SRC-EGY | Provenance | Égypte | CAPMAS identifié dans les archives documentaires ; rattachement exact aux valeurs à vérifier | 2010–2019 + agrégats 2019 | personnes / parts | couverture partielle |
 
 ---
 
@@ -59,6 +61,9 @@ La chaîne de traçabilité retenue est :
 **Fichier harmonisé :** `audit_harmonisation_arrivees_7_pays_trends.xlsx`  
 **Destination finale :** couche `arrivals` du dataset maître.
 
+**Page officielle vérifiée :** https://data.worldbank.org/indicator/ST.INT.ARVL\
+**Source statistique sous-jacente indiquée :** Yearbook of Tourism Statistics, Compendium of Tourism Statistics and data files, UN Tourism.
+
 ### Traitement appliqué
 
 - sélection des sept destinations ;
@@ -72,7 +77,7 @@ La chaîne de traçabilité retenue est :
 
 Une valeur absente dans la série WDI n'est jamais transformée en zéro.
 
-**URL exacte utilisée lors du téléchargement :** `À VÉRIFIER dans l'archive de collecte avant ajout au registre.`
+**URL historique de téléchargement, méthode et date d'extraction :** `À VÉRIFIER` ; une page officielle actuelle ne prouve pas les conditions de collecte historiques.
 
 ---
 
@@ -91,6 +96,8 @@ Une valeur absente dans la série WDI n'est jamais transformée en zéro.
 **Fichier harmonisé :** `audit_harmonisation_recettes_7_pays_trends.xlsx`  
 **Destination finale :** couche `receipts` du dataset maître.
 
+**Page officielle vérifiée :** https://data.worldbank.org/indicator/ST.INT.RCPT.CD
+
 ### Traitement appliqué
 
 - sélection des sept destinations ;
@@ -101,9 +108,9 @@ Une valeur absente dans la série WDI n'est jamais transformée en zéro.
 
 ### Limites
 
-Les recettes sont exprimées en dollars courants. Une comparaison temporelle de niveau ne constitue donc pas automatiquement une mesure en prix constants.
+Les recettes sont exprimées en USD courants, sans correction de l'inflation. Une comparaison temporelle de niveau ne constitue donc pas automatiquement une mesure en prix constants.
 
-**URL exacte utilisée lors du téléchargement :** `À VÉRIFIER dans l'archive de collecte avant ajout au registre.`
+**URL historique de téléchargement, méthode et date d'extraction :** `À VÉRIFIER` ; une page officielle actuelle ne prouve pas les conditions de collecte historiques.
 
 ---
 
@@ -123,9 +130,9 @@ Les recettes sont exprimées en dollars courants. Une comparaison temporelle de 
 
 Les données ont été collectées depuis une source open data marocaine utilisée pendant la phase de collecte.
 
-**Organisme exact :** `À VÉRIFIER dans le fichier/source original.`  
-**Nom exact du jeu de données :** `À VÉRIFIER.`  
-**URL exacte :** `À VÉRIFIER.`  
+**Producteur vérifié :** MTAESS — Ministère du Tourisme, de l’Artisanat et de l’Économie Sociale et Solidaire.\
+**Titre exact vérifié :** Evolution par nationalité des arrivées des touristes aux postes frontières 2012-2020.\
+**Page officielle vérifiée :** https://data.gov.ma/data/fr/dataset/evolution-par-nationalite-des-arrivees-des-touristes-aux-postes-frontieres-2012-2020\
 **Date d'accès :** `À VÉRIFIER.`
 
 ### Couverture
@@ -134,7 +141,7 @@ La série retenue contient des volumes d'arrivées par marché d'origine pour la
 
 ### Précaution
 
-La source doit être ré-identifiée précisément avant toute publication externe du registre. Le fichier standardisé ne suffit pas, à lui seul, à prouver l'URL originale.
+Le portail décrit l'évolution par nationalité des arrivées aux postes frontières pour 2012–2020. L'identification de cette page ne prouve pas l'URL utilisée historiquement ni la date d'accès : `À VÉRIFIER`. Les agrégats Maghreb/Scandinavie et les MRE restent distincts des marchés pays.
 
 ---
 
@@ -154,7 +161,7 @@ La source doit être ré-identifiée précisément avant toute publication exter
 
 Les publications ONTT contiennent notamment les tableaux d'**arrivées aux frontières des non-résidents par nationalité**.
 
-Les archives du projet comprennent plusieurs éditions/extraits annuels, notamment :
+Les noms d'éditions/extraits documentés historiquement sont conservés ci-dessous ; ces fichiers ne sont pas présents dans les dossiers sources du dépôt audité :
 - `tourisme en chiffres 2017.pdf`
 - `Tourisme en chiffres 2018.pdf`
 - `extrait tourisme en chiffres 2019 vf.pdf`
@@ -171,7 +178,9 @@ Les données permettent de travailler avec des marchés d'origine détaillés et
 
 - distinguer les nationalités individuelles des agrégats (`TOTAL EUROPEENS`, `TOTAL MAGHREBINS`, etc.) ;
 - ne pas compter simultanément un agrégat et ses composantes dans un total analytique ;
-- distinguer touristes étrangers et Tunisiens résidant à l'étranger lorsque nécessaire.
+- distinguer touristes étrangers et Tunisiens résidant à l'étranger lorsque nécessaire ;
+- conserver les 60 valeurs manquantes en 2017–2018 (`missing_unverified`) : leur cause est `À VÉRIFIER`, missing ≠ 0 ;
+- traiter « Scandinaves » comme agrégat régional, non comme pays ; sa composition exacte reste `À VÉRIFIER`.
 
 **URL(s) exacte(s) des éditions utilisées :** `À VÉRIFIER avant ajout.`  
 **Date(s) d'accès :** `À VÉRIFIER.`
@@ -194,8 +203,12 @@ Les données permettent de travailler avec des marchés d'origine détaillés et
 
 Le jeu intégré correspond à un **Top 30**. Il ne doit donc pas être interprété comme une liste exhaustive de tous les marchés émetteurs du Kenya.
 
-**Titre exact du rapport :** `À VÉRIFIER dans l'archive de collecte.`  
-**URL exacte :** `À VÉRIFIER.`  
+**Rapports officiels identifiés :**
+- Annual Tourism Sector Performance Report 2022 : https://tri.go.ke/wp-content/uploads/2023/12/TOURISM-SECTOR-PERFORMANCE-REPORT_2022.pdf ; tableau « Performance by Source Markets - Top 30 Source Countries 2022 ».
+- Tourism Sector Performance Report 2023 : URL exacte `À VÉRIFIER`.
+- Annual Tourism Sector Performance Report 2024 : https://tri.go.ke/wp-content/uploads/2025/02/TRI-Tourism-Sector-Performance-Report-2024.pdf ; Directorate of Immigration Services indiquée comme source du tableau correspondant.
+
+« United Nations Organization » est une catégorie institutionnelle, pas un pays. Sa définition exacte reste `À VÉRIFIER`. L'identification des rapports ne constitue pas une validation valeur par valeur du panel harmonisé.\
 **Date d'accès :** `À VÉRIFIER.`
 
 ---
@@ -221,9 +234,11 @@ Les données retenues pour cette dimension correspondent à des **parts** et non
 - ne jamais présenter les parts comme des nombres d'arrivées ;
 - ne pas comparer directement leur valeur avec les volumes des autres pays ;
 - conserver l'unité `share` ;
-- signaler la couverture Top 15.
+- signaler la couverture partielle Top 15 ;
+- aucune reconstruction en nombre d'arrivées et aucune renormalisation à 100 %.
 
-**Titre exact de la publication :** `À VÉRIFIER.`  
+**Collection officielle identifiée :** International Visitors' Exit Survey Reports.\
+**Éditions, tables et URL exactes rattachées aux valeurs 2022–2024 :** `À VÉRIFIER`.\
 **URL exacte :** `À VÉRIFIER.`  
 **Date d'accès :** `À VÉRIFIER.`
 
@@ -245,7 +260,8 @@ Les données retenues pour cette dimension correspondent à des **parts** et non
 
 Le panel intégré ne représente pas nécessairement l'ensemble des marchés d'origine. Les analyses doivent être présentées comme une analyse du périmètre disponible et non comme un classement exhaustif.
 
-**Publication/table exacte :** `À VÉRIFIER dans l'archive de collecte.`  
+**Collection identifiée :** International Travel and Tourism ; ventilation par Country of Residence. Réunion / Reunion Island reste un marché distinct de France, conformément à la source et au dataset harmonisé.\
+**Éditions et tables exactes rattachées au panel :** `À VÉRIFIER`.\
 **URL exacte :** `À VÉRIFIER.`  
 **Date d'accès :** `À VÉRIFIER.`
 
@@ -267,7 +283,8 @@ Le panel intégré ne représente pas nécessairement l'ensemble des marchés d'
 
 Le jeu intégré est un panel et non une couverture exhaustive de tous les marchés émetteurs. Les classements doivent rester limités au panel réellement présent.
 
-**Titre exact de la publication/table :** `À VÉRIFIER dans l'archive de collecte.`  
+**Collections officielles identifiées :** P0351 — Tourism and Migration ; P0350 — International Tourism pour les publications correspondantes plus récentes. Ventilation notamment par région et country of residence.\
+**Rattachement du panel annuel de 18 marchés aux tables/publications exactes :** `À VÉRIFIER`. L'institution et les collections sont identifiées, pas chaque correspondance annuelle.\
 **URL exacte :** `À VÉRIFIER.`  
 **Date d'accès :** `À VÉRIFIER.`
 
@@ -301,7 +318,9 @@ Ces deux indicateurs ne doivent pas être mélangés.
 
 ### Sources archivées
 
-Les archives du projet contiennent plusieurs publications CAPMAS sur les statistiques touristiques. Elles confirment l'utilisation de catégories régionales et la publication de statistiques d'arrivées et de nuitées.
+CAPMAS est identifié dans l'historique des archives documentaires du projet. Ces archives ne sont pas présentes dans les dossiers sources du dépôt audité ; cette identification institutionnelle ne démontre pas le rattachement de chaque valeur à une publication CAPMAS précise.
+
+Les dix observations États-Unis 2010–2019 conservent `source_name = "User-provided source file"`. Les parts régionales portent une attribution CAPMAS dans le maître, mais leur référence exacte reste à vérifier. Aucune attribution du dataset n'est modifiée par cette consolidation documentaire.
 
 ### Précautions
 
@@ -318,6 +337,12 @@ Les archives du projet contiennent plusieurs publications CAPMAS sur les statist
 ---
 
 # 6. Fichiers issus de la collecte
+
+Les noms historiques des sections 6.1 et 6.2 sont documentés dans le registre, mais les fichiers correspondants ne sont actuellement présents ni dans `data/raw/` ni dans `data/processed/`. Les fichiers maîtres de la section 6.3 sont présents dans `data/final/`.
+
+**REPRODUCTIBLE depuis le dataset maître :** exploitation du dataset final, corrections de métadonnées applicables au maître, EDA, indicateurs et dashboard.
+
+**NON AUTONOME avec le seul dépôt actuel :** reconstruction intégrale du maître depuis toutes les publications originales. Il s'agit d'une limite de traçabilité/reconstruction, pas d'une invalidation du dataset final.
 
 ## 6.1 Fichiers sources / intermédiaires principaux
 
@@ -378,34 +403,17 @@ Lorsqu'une information n'est pas connue, utiliser `À VÉRIFIER` plutôt que de 
 
 # 8. Points restant à consolider
 
-**À FAIRE — Source Maroc**
-- retrouver l'organisme exact ;
-- retrouver le nom exact du jeu open data ;
-- retrouver l'URL et la date d'accès.
+Les institutions, collections et pages indiquées comme vérifiées ci-dessus ne restent pas des tâches ouvertes. Restent :
 
-**À FAIRE — Kenya**
-- retrouver le titre exact du ou des rapports TRI ;
-- enregistrer l'URL officielle et la date d'accès.
-
-**À FAIRE — Tanzanie**
-- retrouver le titre exact de la publication NBS ;
-- enregistrer l'URL et la date d'accès.
-
-**À FAIRE — Maurice**
-- retrouver la table/publication exacte de Statistics Mauritius ;
-- enregistrer l'URL et la date d'accès.
-
-**À FAIRE — Afrique du Sud**
-- retrouver le rapport/table Stats SA exact ;
-- enregistrer l'URL et la date d'accès.
-
-**À FAIRE — Égypte**
-- relier chaque groupe de données du fichier standardisé au document CAPMAS exact ;
-- identifier précisément la source des parts régionales 2019.
-
-**À FAIRE — Banque mondiale**
-- conserver l'URL exacte ou la méthode d'extraction utilisée pour les deux fichiers WDI ;
-- renseigner la date d'extraction si elle peut être retrouvée.
+- **Banque mondiale :** URL/méthode historique et dates d'extraction des deux séries — `À VÉRIFIER`.
+- **Maroc :** date d'accès et URL effectivement utilisée historiquement — `À VÉRIFIER` ; producteur, titre et page officielle consolidés.
+- **Tunisie :** URL des éditions et dates d'accès, cause des 60 absences, composition de Scandinaves — `À VÉRIFIER`.
+- **Kenya :** URL 2023, dates d'accès, correspondance précise des valeurs harmonisées avec les tables et définition de la catégorie ONU — `À VÉRIFIER`.
+- **Tanzanie :** éditions/tables/URL exactes et dates d'accès — `À VÉRIFIER` ; collection Exit Survey et nature Top 15 en parts consolidées.
+- **Maurice :** tables annuelles exactes, URL et dates d'accès — `À VÉRIFIER` ; collection et ventilation par résidence identifiées.
+- **Afrique du Sud :** rattachement précis du panel annuel de 18 marchés aux publications/tables, URL et dates d'accès — `À VÉRIFIER`.
+- **Égypte :** référence exacte de la série USA 2010–2019 et des parts régionales 2019, correspondances valeur → publication et dates historiques — `À VÉRIFIER`. Ne pas présumer que toutes les valeurs proviennent d'une publication CAPMAS déterminée.
+- **Archives :** localisation et récupération des fichiers sources/intermédiaires historiques — `À VÉRIFIER` ; documenter ensuite la chaîne de reconstruction.
 
 ---
 
@@ -413,6 +421,7 @@ Lorsqu'une information n'est pas connue, utiliser `À VÉRIFIER` plutôt que de 
 
 | Date | Modification |
 |---|---|
+| 2026-09-15 | Consolidation des références institutionnelles fournies ; réserves historiques, granularités et disponibilité des archives explicitées, sans modification des données |
 | 2026-09-08 | Création du registre central des sources |
 | 2026-09-08 | Identification des sources principales arrivées / recettes |
 | 2026-09-08 | Documentation des sept périmètres de provenance |

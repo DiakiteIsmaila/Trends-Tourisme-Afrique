@@ -1062,7 +1062,6 @@ notebooks/01_analyse_exploratoire.ipynb
 dashboard/app.py
 src/data_processing.py
 src/indicators.py
-src/visualizations.py
 ```
 
 ---
