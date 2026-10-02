@@ -273,12 +273,68 @@ LAYER_LABELS = {
 }
 
 METRIC_TYPE_LABELS = {
-    "tourist_arrivals": "Arrivées touristiques",
-    "regional_tourist_share": "Part des touristes",
+    "destination_total": "Total de la destination",
+    "diaspora_arrivals": "Arrivées de la diaspora",
     "regional_tourist_nights_share": "Part des nuitées",
+    "regional_tourist_share": "Part des touristes",
+    "source_market_share": "Part du marché d’origine",
+    "tourist_arrivals": "Arrivées touristiques",
 }
 
+GRANULARITY_LABELS = {
+    "aggregate_total": "Total agrégé",
+    "country": "Pays / territoire",
+    "destination_total": "Total de la destination",
+    "diaspora": "Diaspora",
+    "institutional_category": "Catégorie institutionnelle",
+    "regional_aggregate": "Agrégat régional",
+}
 
+UNIT_LABELS = {
+    "persons": "Personnes",
+    "share": "Part (%)",
+    "current_USD": "USD courants",
+}
+
+QUALITY_FLAG_LABELS = {
+    "available": "Disponible",
+    "exact_aggregate": "Agrégat exact",
+    "exact_country": "Donnée pays exacte",
+    "exact_diaspora": "Donnée diaspora exacte",
+    "exact_main7": "Panel exact de 7 marchés",
+    "exact_panel18": "Panel exact de 18 marchés",
+    "exact_single_country": "Donnée exacte pour un seul pays",
+    "exact_top30": "Top 30 exact",
+    "missing_in_source": "Valeur absente de la source",
+    "missing_unverified": "Valeur manquante non vérifiée",
+    "regional_share_only": "Part régionale uniquement",
+    "survey_share_top15": "Top 15 issu de l’enquête",
+}
+
+COLUMN_LABELS = {
+    "destination": "Destination",
+    "year": "Année",
+    "origin_name": "Origine",
+    "granularity": "Granularité",
+    "metric_type": "Indicateur",
+    "value": "Valeur brute",
+    "unit": "Unité",
+    "coverage_scope": "Couverture",
+    "quality_flag": "Qualité",
+    "source_name": "Source",
+    "source_reference": "Référence",
+    "notes": "Notes",
+    "dataset_layer": "Type de données",
+}
+
+# Locale numérique française pour Vega-Lite / Altair :
+# espace insécable comme séparateur de milliers et virgule décimale.
+FRENCH_NUMBER_LOCALE = {
+    "decimal": ",",
+    "thousands": "\u00a0",
+    "grouping": [3],
+    "currency": ["", "\u00a0€"],
+}
 
 def build_annual_change_comment(points, displayed, indicator_label):
     """Resolve a unique business key against the current plotted observations."""
@@ -667,7 +723,7 @@ with tab_trends:
                                                          display_period="2019" if field == "value" else f"{min(common_years)}–{max(common_years)}",
                                                          display_unit=axis_title)
                             chart = alt.Chart(plot_data).mark_bar().encode(
-                                y=alt.Y("destination:N", title="Destination", sort="-x"),
+                                y=alt.Y("destination:N", title="Destination", sort=DESTINATION_ORDER),
                                 x=alt.X(f"{field}:Q", title=axis_title),
                                 tooltip=[alt.Tooltip("destination:N", title="Destination"),
                                          alt.Tooltip("display_dimension:N", title="Dimension"),
@@ -680,6 +736,7 @@ with tab_trends:
                                 on="click", toggle=False, clear="dblclick")
                             chart = chart.add_params(bar_selection).encode(
                                 opacity=alt.condition(bar_selection, alt.value(1), alt.value(0.45)))
+                            chart = chart.configure(locale={"number": FRENCH_NUMBER_LOCALE})
                             event = st.altair_chart(
                                 chart, width="stretch", key="comparison_chart",
                                 on_select="rerun", selection_mode=["comparison_bar"])
@@ -723,7 +780,7 @@ with tab_trends:
                                             scale=alt.Scale(domain=year_domain, zero=False, nice=False),
                                             axis=alt.Axis(format="d", values=year_ticks)),
                                     y=alt.Y("variation_pct:Q", title=axis_title),
-                                    color=alt.Color("destination:N", title="Destination"),
+                                    color=alt.Color("destination:N", title="Destination", sort=DESTINATION_ORDER),
                                     shape=alt.Shape("periode:N", title="Période"),
                                     tooltip=[alt.Tooltip("destination:N", title="Destination"), alt.Tooltip("year:O", title="Année"),
                                              alt.Tooltip("display_indicator:N", title="Indicateur"),
@@ -739,7 +796,7 @@ with tab_trends:
                                 chart = alt.Chart(plot_data).mark_line(point=True).encode(
                                     x=alt.X("year:Q", title="Année", axis=alt.Axis(format="d")),
                                     y=alt.Y("value:Q", title=trend_unit),
-                                    color=alt.Color("destination:N", title="Destination"),
+                                    color=alt.Color("destination:N", title="Destination", sort=DESTINATION_ORDER),
                                     detail="segment:N", order="year:Q",
                                     tooltip=[alt.Tooltip("destination:N", title="Destination"), alt.Tooltip("year:O", title="Année"),
                                              alt.Tooltip("display_indicator:N", title="Indicateur"),
@@ -753,6 +810,7 @@ with tab_trends:
                                     on="click", toggle=False, clear="dblclick")
                                 chart = chart.add_params(point_selection).encode(
                                     opacity=alt.condition(point_selection, alt.value(1), alt.value(0.45)))
+                                chart = chart.configure(locale={"number": FRENCH_NUMBER_LOCALE})
                                 event = st.altair_chart(
                                     chart, width="stretch", key="annual_change_chart",
                                     on_select="rerun", selection_mode=["annual_change_point"])
@@ -765,6 +823,7 @@ with tab_trends:
                                 else:
                                     st.caption("Cliquez sur un point pour afficher son interprétation.")
                             else:
+                                chart = chart.configure(locale={"number": FRENCH_NUMBER_LOCALE})
                                 st.altair_chart(chart, width="stretch")
                         else:
                             st.info("Aucune valeur calculable pour cette sélection.")
@@ -849,15 +908,51 @@ with tab_origin:
         valeurs_absentes=("value", lambda s: int(s.isna().sum()))).reset_index()
     origin_coverage.insert(0, "year", selected_origin_year)
     origin_coverage.insert(0, "destination", selected_origin_destination)
-    st.dataframe(origin_coverage, width="stretch", hide_index=True)
+
+    # Version lisible pour l'interface : les données techniques restent inchangées.
+    origin_coverage_display = origin_coverage.copy()
+    origin_coverage_display["granularity"] = origin_coverage_display["granularity"].map(
+        lambda x: GRANULARITY_LABELS.get(x, x)
+    )
+    origin_coverage_display["metric_type"] = origin_coverage_display["metric_type"].map(
+        lambda x: METRIC_TYPE_LABELS.get(x, x)
+    )
+    origin_coverage_display["unit"] = origin_coverage_display["unit"].map(
+        lambda x: UNIT_LABELS.get(x, x)
+    )
+    origin_coverage_display["quality_flag"] = origin_coverage_display["quality_flag"].map(
+        lambda x: QUALITY_FLAG_LABELS.get(x, x)
+    )
+    origin_coverage_display = origin_coverage_display.rename(
+        columns={
+            **COLUMN_LABELS,
+            "lignes": "Lignes",
+            "valeurs_renseignees": "Valeurs renseignées",
+            "valeurs_absentes": "Valeurs absentes",
+        }
+    )
+    st.dataframe(origin_coverage_display, width="stretch", hide_index=True)
     if selected_origin_destination == "Tunisie":
         tunisian_missing = destination_df.loc[destination_df.value.isna()]
         st.caption(
             f"{len(tunisian_missing)} valeurs absentes dans la provenance tunisienne ; "
-            "les absences 2017–2018 restent non vérifiées (missing_unverified), jamais remplacées par zéro.")
+            "les absences 2017–2018 restent non vérifiées et ne sont jamais remplacées par zéro.")
         if not tunisian_missing.empty:
-            missing_coverage = tunisian_missing.groupby(["year", "quality_flag"]).size().reset_index(name="valeurs_absentes")
-            st.dataframe(missing_coverage, width="stretch", hide_index=True)
+            missing_coverage = tunisian_missing.groupby(
+                ["year", "quality_flag"]
+            ).size().reset_index(name="valeurs_absentes")
+            missing_coverage_display = missing_coverage.copy()
+            missing_coverage_display["quality_flag"] = missing_coverage_display["quality_flag"].map(
+                lambda x: QUALITY_FLAG_LABELS.get(x, x)
+            )
+            missing_coverage_display = missing_coverage_display.rename(
+                columns={
+                    "year": "Année",
+                    "quality_flag": "Qualité",
+                    "valeurs_absentes": "Valeurs absentes",
+                }
+            )
+            st.dataframe(missing_coverage_display, width="stretch", hide_index=True)
     if selected_origin_destination == "Tanzanie":
         st.info(
             "Top 15 de l'Exit Survey : parts publiées, susceptibles de totaliser moins de 100 %. "
@@ -878,35 +973,51 @@ with tab_origin:
         # Quality is included in grouping: missing rows remain visible in their own group.
         for identity, group in table.groupby(origin_group_columns + ["quality_flag"], dropna=False, sort=False):
             granularity, metric_type, unit, scope, quality = identity
-            st.write(f"**{granularity} — {metric_type} — {unit}**")
-            st.caption(f"Année(s) : {', '.join(map(str, sorted(group.year.unique())))} | Couverture : {scope} | Qualité : {quality}")
+
+            granularity_label = GRANULARITY_LABELS.get(granularity, granularity)
+            metric_type_label = METRIC_TYPE_LABELS.get(metric_type, metric_type)
+            unit_label = UNIT_LABELS.get(unit, unit)
+            quality_label = QUALITY_FLAG_LABELS.get(quality, quality)
+
+            st.write(f"**{granularity_label} — {metric_type_label} — {unit_label}**")
+            st.caption(
+                f"Année(s) : {', '.join(map(str, sorted(group.year.unique())))} "
+                f"| Couverture : {scope} | Qualité : {quality_label}"
+            )
             if quality in ["exact_panel18", "exact_top30", "exact_main7", "survey_share_top15"]:
                 st.caption("Panel partiel / Top-N : un classement décrit uniquement les marchés publiés, sans exhaustivité nationale.")
             else:
                 st.caption("Périmètre publié uniquement ; ne pas additionner agrégats et composantes.")
+
             available = group.loc[group.value.notna()].copy()
             # Only homogeneous country or regional categories are ranked.
             chart_allowed = granularity in ["country", "regional_aggregate"]
             if not available.empty and chart_allowed:
                 available["display_value"] = available.value * 100 if unit == "share" else available.value
-                value_label = "Part publiée (%)" if unit == "share" else "Personnes" if unit == "persons" else unit
-                available = available.assign(display_unit="part (%)" if unit == "share" else "personnes",
-                    display_granularity={"country": "pays / territoire", "regional_aggregate": "agrégat régional",
-                                         "institutional_category": "catégorie institutionnelle", "diaspora": "diaspora",
-                                         "aggregate_total": "total agrégé"}.get(granularity, granularity))
+                value_label = "Part publiée (%)" if unit == "share" else "Personnes" if unit == "persons" else unit_label
+                available = available.assign(
+                    display_unit="part (%)" if unit == "share" else "personnes",
+                    display_granularity=GRANULARITY_LABELS.get(granularity, granularity)
+                )
                 chart = alt.Chart(available).mark_bar().encode(
                     x=alt.X("display_value:Q", title=value_label),
                     y=alt.Y("origin_name:N", title="Catégorie publiée", sort="-x"),
-                    tooltip=[alt.Tooltip("destination:N", title="Destination"), alt.Tooltip("origin_name:N", title="Origine"),
-                             alt.Tooltip("year:O", title="Année"), alt.Tooltip("display_value:Q", title="Valeur", format=",.2f"),
-                             alt.Tooltip("display_unit:N", title="Unité"), alt.Tooltip("display_granularity:N", title="Granularité"),
-                             alt.Tooltip("coverage_scope:N", title="Couverture")]
+                    tooltip=[
+                        alt.Tooltip("destination:N", title="Destination"),
+                        alt.Tooltip("origin_name:N", title="Origine"),
+                        alt.Tooltip("year:O", title="Année"),
+                        alt.Tooltip("display_value:Q", title="Valeur", format=",.2f"),
+                        alt.Tooltip("display_unit:N", title="Unité"),
+                        alt.Tooltip("display_granularity:N", title="Granularité"),
+                        alt.Tooltip("coverage_scope:N", title="Couverture"),
+                    ]
                 ).properties(height=max(180, min(800, len(available) * 28)))
                 origin_selection = alt.selection_point(
                     name="origin_bar", fields=ORIGIN_SELECTION_FIELDS,
                     on="click", toggle=False, clear="dblclick")
                 chart = chart.add_params(origin_selection).encode(
                     opacity=alt.condition(origin_selection, alt.value(1), alt.value(0.45)))
+                chart = chart.configure(locale={"number": FRENCH_NUMBER_LOCALE})
                 event = st.altair_chart(
                     chart, width="stretch",
                     key=f"origin_chart_{heading}_{selected_origin_destination}_{identity!r}",
@@ -919,6 +1030,7 @@ with tab_origin:
                         st.markdown(comment)
                 else:
                     st.caption("Cliquez sur une barre pour afficher son interprétation.")
+
             display_group = group[[
                 "destination", "year", "origin_name", "granularity", "metric_type",
                 "value", "unit", "coverage_scope", "quality_flag", "source_name", "source_reference", "notes"
@@ -926,6 +1038,17 @@ with tab_origin:
             # No global sort across incompatible categories or units.
             display_group["Valeur affichée"] = display_group.apply(
                 lambda row: "Non disponible" if pd.isna(row.value) else format_display_value(row.value, row.unit), axis=1)
+
+            display_group["granularity"] = display_group["granularity"].map(
+                lambda x: GRANULARITY_LABELS.get(x, x))
+            display_group["metric_type"] = display_group["metric_type"].map(
+                lambda x: METRIC_TYPE_LABELS.get(x, x))
+            display_group["unit"] = display_group["unit"].map(
+                lambda x: UNIT_LABELS.get(x, x))
+            display_group["quality_flag"] = display_group["quality_flag"].map(
+                lambda x: QUALITY_FLAG_LABELS.get(x, x))
+            display_group = display_group.rename(columns=COLUMN_LABELS)
+
             st.dataframe(display_group, width="stretch", hide_index=True)
 
     if selected_origin_destination == "Égypte":
