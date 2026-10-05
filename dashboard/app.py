@@ -294,6 +294,13 @@ UNIT_LABELS = {
     "persons": "Personnes",
     "share": "Part (%)",
     "current_USD": "USD courants",
+    "current_USD_per_arrival": "USD courants par arrivée",
+}
+
+METRIC_LABELS = {
+    "tourist_arrivals": "Arrivées touristiques",
+    "tourism_receipts": "Recettes touristiques",
+    "receipts_per_arrival": "Ratio recettes / arrivées",
 }
 
 QUALITY_FLAG_LABELS = {
@@ -369,6 +376,84 @@ def build_annual_change_comment(points, displayed, indicator_label):
         )
     return text
 
+
+
+
+def build_level_comment(points, displayed, indicator_label, selected_layer):
+    """Décrit un point de niveau observé, sans extrapolation ni classement."""
+    if not isinstance(points, list) or len(points) != 1 or not isinstance(points[0], dict):
+        return None
+    point = points[0]
+    if point.get("display_indicator") != indicator_label:
+        return None
+    rows = displayed.loc[
+        displayed.destination.eq(point.get("destination"))
+        & displayed.year.eq(point.get("year"))
+        & displayed.value.notna()
+    ]
+    if len(rows) != 1:
+        return None
+    row = rows.iloc[0]
+    value = float(row.value)
+    if selected_layer == "arrivals":
+        formatted = f"{value:,.0f} personnes".replace(",", " ")
+        label = "Arrivées touristiques"
+    elif selected_layer == "receipts":
+        formatted = f"{value:,.0f} USD courants".replace(",", " ")
+        label = "Recettes touristiques"
+    else:
+        formatted = f"{value:,.2f}".replace(",", " ").replace(".", ",")
+        formatted += " USD courants par arrivée"
+        label = "Ratio recettes / arrivées"
+    text = (
+        f"**{row.destination} · {int(row.year)}**\n\n"
+        f"{label} : **{formatted}.**"
+    )
+    if selected_layer == "receipts":
+        text += "\n\nLes recettes sont exprimées en USD courants, sans correction de l'inflation."
+    if selected_layer == "ratio":
+        text += (
+            "\n\nCe ratio est calculé à partir des recettes et des arrivées agrégées. "
+            "Il ne représente ni une dépense individuelle ni une mesure de rentabilité."
+        )
+    if int(row.year) == 2020:
+        text += (
+            "\n\nCette observation fait partie de la rupture exceptionnelle de 2020. "
+            "Le dataset actuel ne permet pas de mesurer une reprise post-Covid au-delà de cette rupture."
+        )
+    return text
+
+
+def build_map_comment(points, displayed, indicator_label, unit_label):
+    """Décrit une destination sélectionnée sur la carte, sans classement entre pays."""
+    if not isinstance(points, list) or len(points) != 1 or not isinstance(points[0], dict):
+        return None
+    point = points[0]
+    destination = None
+    customdata = point.get("customdata")
+    if isinstance(customdata, (list, tuple)) and customdata:
+        destination = customdata[0]
+    if not destination:
+        destination = point.get("hovertext") or point.get("text")
+    if not destination and point.get("location"):
+        iso3 = point.get("location")
+        matches = displayed.loc[displayed.iso3.eq(iso3)]
+        if len(matches) == 1:
+            destination = matches.iloc[0].destination
+    rows = displayed.loc[displayed.destination.eq(destination) & displayed.value.notna()]
+    if len(rows) != 1:
+        return None
+    row = rows.iloc[0]
+    formatted = f"{float(row.value):,.0f}".replace(",", " ")
+    text = (
+        f"**{row.destination} · {int(row.year)}**\n\n"
+        f"{indicator_label} : **{formatted} {unit_label}.**\n\n"
+        f"Source : **{row.source_name}.**"
+    )
+    if row.unit == "current_USD":
+        text += "\n\nLes recettes sont exprimées en USD courants, sans correction de l'inflation."
+    text += "\n\nCette lecture décrit uniquement la valeur observée pour la destination sélectionnée ; aucun classement n'est déduit de la carte."
+    return text
 
 
 def build_comparison_comment(points, displayed, field):
@@ -493,6 +578,92 @@ def format_display_value(value: float, unit: str) -> str:
     return f"{value:,.2f}".replace(",", " ")
 
 
+def format_french_number(value, decimals: int = 2) -> str:
+    """Formate un nombre pour l'interface sans modifier la valeur source."""
+    if pd.isna(value):
+        return "Non disponible"
+    formatted = f"{float(value):,.{decimals}f}"
+    return formatted.replace(",", " ").replace(".", ",")
+
+
+def build_trend_display_table(data: pd.DataFrame, selected_layer: str, trend_view: str) -> pd.DataFrame:
+    """Construit une version lisible des tableaux Tendances, distincte des exports."""
+    display = data.copy()
+
+    if "unit" in display.columns:
+        display["unit"] = display["unit"].map(lambda x: UNIT_LABELS.get(x, x))
+
+    if trend_view == "Variation annuelle":
+        columns = [c for c in ["destination", "year", "value", "unit", "variation_pct"] if c in display.columns]
+        display = display[columns]
+        if "value" in display:
+            display["value"] = display["value"].map(
+                lambda x: format_french_number(x, 0) if selected_layer == "arrivals"
+                else format_french_number(x, 2)
+            )
+        if "variation_pct" in display:
+            display["variation_pct"] = display["variation_pct"].map(
+                lambda x: "Non disponible" if pd.isna(x) else f"{format_french_number(x, 2)} %"
+            )
+        return display.rename(columns={
+            "destination": "Destination", "year": "Année", "value": "Valeur",
+            "unit": "Unité", "variation_pct": "Variation annuelle (%)",
+        })
+
+    columns = [c for c in ["destination", "year", "value", "unit"] if c in display.columns]
+    display = display[columns]
+    if "value" in display:
+        decimals = 2 if selected_layer in ["receipts", "ratio"] else 0
+        display["value"] = display["value"].map(lambda x: format_french_number(x, decimals))
+    value_label = "Ratio recettes / arrivées" if selected_layer == "ratio" else "Valeur"
+    return display.rename(columns={
+        "destination": "Destination", "year": "Année", "value": value_label, "unit": "Unité",
+    })
+
+
+def build_comparison_display_table(data: pd.DataFrame, field: str, trend_unit: str) -> pd.DataFrame:
+    """Simplifie le tableau de comparaison selon la dimension réellement choisie."""
+    display = data.copy()
+    if "destination" in display.columns:
+        order_map = {name: idx for idx, name in enumerate(DESTINATION_ORDER)}
+        display["_ordre"] = display["destination"].map(order_map).fillna(len(order_map))
+        display = display.sort_values(["_ordre", "destination"]).drop(columns="_ordre")
+
+    if field == "value":
+        columns = [c for c in ["destination", "year", "value", "unit"] if c in display.columns]
+        display = display[columns]
+        if "value" in display:
+            decimals = 0 if trend_unit == "Personnes" else 2
+            display["value"] = display["value"].map(lambda x: format_french_number(x, decimals))
+        if "unit" in display:
+            display["unit"] = display["unit"].map(lambda x: UNIT_LABELS.get(x, x))
+        return display.rename(columns={
+            "destination": "Destination", "year": "Année",
+            "value": "Valeur", "unit": "Unité",
+        })
+
+    selected_metric = "median_pct" if field == "median_pct" else "volatility_points"
+    columns = [c for c in ["indicator", "destination", "observations", selected_metric, "annees_communes"]
+               if c in display.columns]
+    display = display[columns]
+    if "indicator" in display:
+        display["indicator"] = display["indicator"].map(
+            {"arrivals": "Arrivées touristiques", "receipts": "Recettes touristiques"}
+        ).fillna(display["indicator"])
+    if selected_metric in display:
+        display[selected_metric] = display[selected_metric].map(
+            lambda x: format_french_number(x, 2)
+        )
+    return display.rename(columns={
+        "indicator": "Indicateur",
+        "destination": "Destination",
+        "observations": "Observations",
+        "median_pct": "Variation annuelle médiane (%)",
+        "volatility_points": "Volatilité (points de pourcentage)",
+        "annees_communes": "Années communes",
+    })
+
+
 def safe_filename(text: str) -> str:
     """
     Produit un fragment de nom de fichier simple pour les exports CSV.
@@ -603,8 +774,45 @@ with st.expander("Contrôle technique du dataset"):
         "les unités et les niveaux de granularité."
     )
 
+    # Copie dédiée à l'affichage : le dataset maître reste strictement inchangé.
+    master_preview = df.head(20).copy()
+
+    if "dataset_layer" in master_preview.columns:
+        master_preview["dataset_layer"] = master_preview["dataset_layer"].map(
+            lambda x: LAYER_LABELS.get(x, x)
+        )
+    if "granularity" in master_preview.columns:
+        master_preview["granularity"] = master_preview["granularity"].map(
+            lambda x: GRANULARITY_LABELS.get(x, x)
+        )
+    if "metric_type" in master_preview.columns:
+        master_preview["metric_type"] = master_preview["metric_type"].map(
+            lambda x: METRIC_TYPE_LABELS.get(x, x)
+        )
+    if "metric" in master_preview.columns:
+        master_preview["metric"] = master_preview["metric"].map(
+            lambda x: METRIC_LABELS.get(x, x)
+        )
+    if "unit" in master_preview.columns:
+        master_preview["unit"] = master_preview["unit"].map(
+            lambda x: UNIT_LABELS.get(x, x)
+        )
+    if "quality_flag" in master_preview.columns:
+        master_preview["quality_flag"] = master_preview["quality_flag"].map(
+            lambda x: QUALITY_FLAG_LABELS.get(x, x)
+        )
+
+    master_preview = master_preview.rename(
+        columns={
+            **COLUMN_LABELS,
+            "iso3": "Code ISO-3",
+            "origin_region": "Région d’origine",
+            "metric": "Mesure",
+        }
+    )
+
     st.dataframe(
-        df.head(20),
+        master_preview,
         width="stretch",
         hide_index=True,
     )
@@ -750,7 +958,10 @@ with tab_trends:
                                 st.caption("Cliquez sur une barre pour afficher son interprétation.")
                         else:
                             st.info("Données insuffisantes pour cette comparaison.")
-                        st.dataframe(view_data, width="stretch", hide_index=True)
+                        comparison_display = build_comparison_display_table(
+                            view_data, field, trend_unit
+                        )
+                        st.dataframe(comparison_display, width="stretch", hide_index=True)
                     else:
                         export_df = pd.DataFrame()
                 else:
@@ -823,11 +1034,31 @@ with tab_trends:
                                 else:
                                     st.caption("Cliquez sur un point pour afficher son interprétation.")
                             else:
+                                level_selection = alt.selection_point(
+                                    name="trend_level_point",
+                                    fields=["destination", "year", "display_indicator"],
+                                    on="click", toggle=False, clear="dblclick")
+                                chart = chart.add_params(level_selection).encode(
+                                    opacity=alt.condition(level_selection, alt.value(1), alt.value(0.45)))
                                 chart = chart.configure(locale={"number": FRENCH_NUMBER_LOCALE})
-                                st.altair_chart(chart, width="stretch")
+                                event = st.altair_chart(
+                                    chart, width="stretch", key=f"trend_level_chart_{selected_layer}",
+                                    on_select="rerun", selection_mode=["trend_level_point"])
+                                comment = build_level_comment(
+                                    event.get("selection", {}).get("trend_level_point", []),
+                                    view_data, applied_indicator, selected_layer)
+                                if comment:
+                                    with st.container(border=True):
+                                        st.markdown("### Lecture du graphique")
+                                        st.markdown(comment)
+                                else:
+                                    st.caption("Cliquez sur un point pour afficher son interprétation.")
                         else:
                             st.info("Aucune valeur calculable pour cette sélection.")
-                        st.dataframe(export_df, width="stretch", hide_index=True)
+                        trends_display = build_trend_display_table(
+                            export_df, selected_layer, trend_view
+                        )
+                        st.dataframe(trends_display, width="stretch", hide_index=True)
                 if not export_df.empty:
                     # Enrich only the CSV; displayed tables and calculations are unchanged.
                     export_metadata = ["metric", "metric_type", "source_name", "source_reference",
@@ -1137,7 +1368,7 @@ with tab_map:
         else:
             fig = px.choropleth(
                 mapped_df.assign(display_indicator=map_indicator_label, display_unit=map_unit_label), locations="iso3", locationmode="ISO-3", color="value",
-                scope="africa", hover_name="destination",
+                scope="africa", hover_name="destination", custom_data=["destination", "year", "source_name", "unit"],
                 hover_data={"value": ":,.0f", "year": True, "display_unit": True, "display_indicator": True,
                             "source_name": True, "iso3": False},
                 labels={"destination": "Destination", "year": "Année", "value": "Valeur",
@@ -1150,9 +1381,44 @@ with tab_map:
                 font=dict(color=CORP["text"], size=13),
                 title=dict(x=0.01, xanchor="left", font=dict(color=CORP["text"], size=20)))
             fig.update_geos(bgcolor=CORP["bg"], showcoastlines=True, showland=True)
-            st.plotly_chart(fig, width="stretch")
+            map_event = st.plotly_chart(
+                fig, width="stretch", key="national_map_chart",
+                on_select="rerun", selection_mode="points")
+            map_points = []
+            if map_event and getattr(map_event, "selection", None):
+                map_points = list(getattr(map_event.selection, "points", []) or [])
+            map_comment = build_map_comment(
+                map_points, mapped_df, map_indicator_label, map_unit_label)
+            if map_comment:
+                with st.container(border=True):
+                    st.markdown("### Lecture de la carte")
+                    st.markdown(map_comment)
+            else:
+                st.caption("Cliquez sur une destination colorée pour afficher sa lecture.")
         st.write("### Données du périmètre cartographique")
+        # Copie dédiée à l'affichage : la carte, les calculs et l'export restent inchangés.
         map_display = map_df[["destination", "year", "value", "unit", "source_name", "quality_flag"]].copy()
+
+        # Valeurs lisibles au format français, sans modifier les données numériques sources.
+        map_display["value"] = map_display["value"].map(
+            lambda x: "Non disponible" if pd.isna(x) else format_french_number(x, 0)
+        )
+        map_display["unit"] = map_display["unit"].map(
+            lambda x: UNIT_LABELS.get(x, x)
+        )
+        map_display["quality_flag"] = map_display["quality_flag"].map(
+            lambda x: QUALITY_FLAG_LABELS.get(x, x)
+        )
+        map_display = map_display.rename(
+            columns={
+                "destination": "Destination",
+                "year": "Année",
+                "value": "Valeur",
+                "unit": "Unité",
+                "source_name": "Source",
+                "quality_flag": "Qualité",
+            }
+        )
         st.dataframe(map_display, width="stretch", hide_index=True)
         map_export = map_df.rename(columns={"dataset_layer": "indicator"}).copy()
         map_csv = map_export.to_csv(index=False).encode("utf-8")
