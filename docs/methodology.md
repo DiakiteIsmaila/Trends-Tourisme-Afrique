@@ -931,3 +931,5 @@ EDA 01–12 et dashboard finalisés ; indicateurs sélectionnés. Les mentions d
 Les comparaisons de provenance restent limitées aux périmètres compatibles ; Top-N et panels partiels sont signalés. Pays, agrégats régionaux, diasporas et catégories institutionnelles restent distincts. La couverture égyptienne ne permet aucun classement global des marchés.
 
 L’exploitation du maître, ses corrections documentées, l’EDA, les indicateurs et le dashboard sont reproductibles depuis le dataset final. La reconstruction intégrale depuis toutes les publications originales est NON AUTONOME avec le dépôt actuel : les sources/intermédiaires historiques ne sont pas présents dans data/raw/ ou data/processed/. Voir data_sources.md pour les références identifiées et les réserves restantes.
+
+- **5 octobre 2026** — Finalisation ergonomique du dashboard : harmonisation des libellés utilisateur, formats numériques français, ordre des destinations et tableaux d'affichage, avec séparation maintenue entre transformations de présentation et valeurs analytiques/exportées ; ajout de lectures interactives strictement descriptives.

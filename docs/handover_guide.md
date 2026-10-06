@@ -1,6 +1,6 @@
 # Guide de reprise — Projet Trends
 
-**État au 15 septembre 2026 :** EDA et dashboard finalisés ; phase de clôture/transmission.
+**État au 5 octobre 2026 :** EDA et dashboard finalisés ; ergonomie et lectures interactives du dashboard harmonisées ; phase de clôture/transmission.
 
 ## 1. Point d'entrée
 
@@ -62,6 +62,12 @@ L'application charge le CSV à partir de son emplacement dans le dépôt. Aucune
 - **Provenance :** destination, année et catégorie dans la sidebar ; couverture, qualité, absences et unités explicites. Le panneau régional égyptien est fixé à 2019 et distingué de l'année du marché pays.
 - **Carte :** indicateur national et année dans la sidebar, 2019 par défaut ; mêmes année et unité pour toutes les destinations.
 - **Exports :** CSV correspondant aux périmètres des vues ; parts conservées sous leur unité, absences laissées vides. L'Égypte dispose d'un export distinct pour les parts régionales 2019.
+
+### Ergonomie et lecture interactive
+
+L'interface utilisateur traduit les principaux libellés techniques, utilise un format numérique français et maintient un ordre cohérent des destinations dans les visualisations. Ces transformations concernent l'affichage et ne modifient pas les valeurs analytiques du dataset maître ni celles des exports.
+
+Les vues Évolution, Variation annuelle, Ratio recettes / arrivées, Comparaison, Provenance et Carte proposent des éléments de lecture contextuelle lorsque cela est pertinent. Ces lectures restent descriptives et respectent les mêmes règles méthodologiques que l'EDA : missing ≠ 0, absence d'inférence causale, recettes en USD courants et prudence particulière autour de 2020.
 
 ## 6. Règles à préserver
 

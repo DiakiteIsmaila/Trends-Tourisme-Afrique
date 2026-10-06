@@ -1,7 +1,7 @@
 # Documentation du projet Trends
 
 **Projet :** Trends — Gaea21
-**État au 15 septembre 2026 :** analyses et dashboard finalisés ; clôture/transmission.
+**État au 5 octobre 2026 :** analyses et dashboard finalisés ; ergonomie finale du dashboard harmonisée ; clôture/transmission.
 
 ## 1. Objectif et périmètre
 
@@ -44,6 +44,10 @@ Les comparaisons de niveaux utilisent 2019, année commune. Les variations annue
 - **Provenance :** destination, année et catégorie ; couverture et absences visibles, groupes homogènes, panels partiels signalés. Parts tanzaniennes sans conversion ; marché pays égyptien distinct du panneau régional 2019 et des deux métriques de parts.
 - **Carte :** arrivées ou recettes, année commune 2019 par défaut, unité et destinations absentes explicites.
 - Tableaux et exports CSV conservent les unités, périodes et métadonnées adaptées à chaque vue. Aucun score composite.
+
+L'ergonomie finale distingue explicitement la présentation utilisateur des données analytiques sources : les principaux libellés techniques sont traduits à l'affichage, les nombres utilisent un format français et l'ordre des destinations est harmonisé dans les visualisations. Les tableaux affichés sont rendus plus lisibles tandis que les exports conservent les valeurs analytiques et unités prévues par la méthodologie.
+
+Des lectures interactives descriptives ont également été ajoutées aux vues pertinentes. Elles ne modifient ni les calculs ni les règles d'interprétation : aucune valeur manquante n'est transformée en zéro, aucune causalité n'est inférée et les limites liées à 2020, aux USD courants, au ratio agrégé et aux couvertures de provenance restent applicables.
 
 ## 6. Corrections et réserves conservées
 
@@ -89,3 +93,5 @@ Toute nouvelle donnée exige une vérification de source, unité, période, gran
 
 - 8 septembre 2026 : documentation initiale et corrections de métadonnées approuvées.
 - 15 septembre 2026 : synchronisation avec l'EDA 01–12 et le dashboard finalisés, sans modification des données ni du code.
+
+- **5 octobre 2026** — Synchronisation avec la version ergonomique finale du dashboard : libellés utilisateur, formats français, ordre des destinations, tableaux d'affichage et lectures interactives descriptives.

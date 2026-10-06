@@ -12,6 +12,10 @@ L'application officielle est **[dashboard/app.py](dashboard/app.py)**. Le dashbo
 - **Provenance** : filtres propres à chaque destination, couverture, groupes comparables et cas particuliers.
 - **Carte** : niveaux nationaux sur une même année, 2019 par défaut, absences explicites.
 
+L'interface finale harmonise les libellés techniques pour l'utilisateur, applique un format numérique français et conserve un ordre cohérent des destinations dans les visualisations. Les tableaux affichés privilégient des libellés lisibles sans modifier les valeurs analytiques conservées dans le dataset et les exports.
+
+Des lectures interactives accompagnent les principales visualisations afin de faciliter l'interprétation des observations sélectionnées. Elles restent strictement descriptives : aucune valeur manquante n'est assimilée à zéro, aucune causalité n'est déduite et les limites propres aux sources et aux indicateurs restent explicites.
+
 Les vues proposent des exports CSV. Le projet est en phase de clôture/transmission ; la validation d'une installation neuve et la consolidation des archives restent distinctes de la finalisation analytique.
 
 ## Organisation du dépôt
