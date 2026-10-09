@@ -664,6 +664,73 @@ def build_comparison_display_table(data: pd.DataFrame, field: str, trend_unit: s
     })
 
 
+# STORYTELLING START: presentation helpers (no statistical calculations)
+def storytelling_text(text):
+    """Translate technical labels for display only."""
+    labels = {**GRANULARITY_LABELS, **METRIC_TYPE_LABELS,
+              "arrivals": "Arrivées", "receipts": "Recettes", "ratio": "Ratio recettes / arrivées",
+              "median": "Variation annuelle médiane", "volatility": "Volatilité"}
+    for token, label in sorted(labels.items(), key=lambda item: -len(item[0])):
+        text = re.sub(r"\b" + re.escape(token) + r"\b", label, text)
+    return text
+
+
+def render_storytelling(observations, destinations, *, documentary=True):
+    """Show each country in a tab inside the enclosing collapsed section."""
+    if not destinations:
+        st.info("Aucune destination sélectionnée.")
+        return
+    panels = st.tabs(destinations) if len(destinations) > 1 else [st.container()]
+    for country, panel in zip(destinations, panels):
+        with panel:
+            country_observations = [item for item in observations if item.destination == country]
+            st.markdown("**Observations statistiques**")
+            if not country_observations:
+                st.info("Aucune observation disponible dans le périmètre affiché.")
+            for item in country_observations:
+                st.write(storytelling_text(item.text))
+            limits = list(dict.fromkeys(limit for item in country_observations for limit in item.limits))
+            if documentary:
+                document = get_country_analysis(country)
+                st.markdown("**Contexte documentaire**")
+                st.write(document.context)
+                st.markdown("**Pistes d’action**")
+                for action in document.action_paths:
+                    st.write(action)
+                limits = list(dict.fromkeys(limits + list(document.limits)))
+            st.markdown("**Limites de lecture**")
+            for limit in limits:
+                st.caption(limit)
+            if documentary:
+                st.markdown("**Sources documentaires**")
+                for reference in document.references:
+                    st.write(reference.citation)
+                    st.caption(reference.status)
+
+
+def selected_story_map_country(points, displayed):
+    """Resolve a unique currently displayed country, rejecting stale metadata."""
+    if not isinstance(points, list) or len(points) != 1 or not isinstance(points[0], dict):
+        return None
+    point = points[0]
+    custom = point.get("customdata")
+    country = custom[0] if isinstance(custom, (list, tuple)) and custom else None
+    country = country or point.get("hovertext") or point.get("text")
+    rows = displayed.loc[displayed.destination.eq(country)] if country else displayed.loc[
+        displayed.iso3.eq(point.get("location"))]
+    rows = rows.loc[rows.value.notna()]
+    if len(rows) != 1:
+        return None
+    row = rows.iloc[0]
+    if isinstance(custom, (list, tuple)):
+        if len(custom) > 1 and custom[1] != row.year:
+            return None
+        if len(custom) > 3 and custom[3] != row.unit:
+            return None
+    return row.destination
+# STORYTELLING END
+
+
 def safe_filename(text: str) -> str:
     """
     Produit un fragment de nom de fichier simple pour les exports CSV.
@@ -856,6 +923,12 @@ with tab_trends:
     from src.indicators import (
         national_series, annual_variations, consecutive_segments, common_pre2020_summary,
     )
+    # STORYTELLING START: independent narrative module
+    from src.storytelling import (
+        national_observations, comparison_observations, provenance_observations,
+        get_country_analysis,
+    )
+    # STORYTELLING END
 
     st.subheader("Tendances nationales")
     selected_destinations = trend_destination_filters.multiselect(
@@ -1099,6 +1172,25 @@ with tab_trends:
                         file_name=f"tendances_{selected_layer}_{safe_filename(trend_view)}.csv",
                         mime="text/csv", key=f"download_trends_{analysis_index}")
 
+            # STORYTELLING START: scoped to this analysis subtab
+            with st.expander("📖 Comprendre les tendances touristiques"):
+                st.caption(f"Périmètre de cette vue : {applied_indicator} | {applied_period}.")
+                if analysis_index == 3 and selected_destinations:
+                    st.caption("Comparaison : période de référence fixe, indépendante du filtre Période.")
+                    story_dimension = {
+                        "Niveaux 2019": "level",
+                        "Variation annuelle médiane pré-2020": "median",
+                        "Volatilité pré-2020": "volatility",
+                    }[comparison_dimension]
+                    story_observations = comparison_observations(
+                        df, selected_destinations, selected_layer, story_dimension)
+                else:
+                    story_observations = national_observations(
+                        df, selected_destinations, selected_layer, year_range,
+                        annual=analysis_index == 1)
+                render_storytelling(story_observations, selected_destinations)
+            # STORYTELLING END
+
 # ==============================================================================
 # ONGLET 2 — PROVENANCE
 # ==============================================================================
@@ -1311,6 +1403,18 @@ with tab_origin:
             data=egypt_regions[export_origin_columns].to_csv(index=False).encode("utf-8"),
             file_name="provenance_egypte_regions_2019.csv", mime="text/csv", key="download_origin_regions")
 
+    # STORYTELLING START: same groups as the displayed provenance panels
+    with st.expander("🌍 Comprendre les marchés d'origine"):
+        story_origin_data = origin_filtered
+        if selected_origin_destination == "Égypte":
+            story_origin_data = pd.concat([
+                origin_filtered.loc[origin_filtered.granularity.eq("country")], egypt_regions,
+            ], ignore_index=True)
+        st.caption("Les observations concernent la provenance publiée ; elles ne prolongent pas les séries nationales. "
+                   "Le contexte documentaire apporte un éclairage général, sans expliquer la composition des marchés.")
+        render_storytelling(provenance_observations(story_origin_data), [selected_origin_destination])
+    # STORYTELLING END
+
 
 # ==============================================================================
 # ONGLET 3 — CARTE
@@ -1425,3 +1529,22 @@ with tab_map:
         st.download_button(
             "Télécharger les données du périmètre en CSV", data=map_csv,
             file_name=f"carte_{map_layer}_{map_year}.csv", mime="text/csv", key="download_map")
+
+        # STORYTELLING START: current map year and indicator only
+        with st.expander("🗺️ Comprendre les dynamiques territoriales"):
+            story_map_country = selected_story_map_country(
+                map_points if HAS_PLOTLY and not mapped_df.empty else [], mapped_df)
+            st.caption(f"{map_indicator_label} | {map_year} | {map_unit_label} | "
+                       f"{len(mapped_df)}/{len(map_df)} destinations couvertes.")
+            if story_map_country:
+                render_storytelling(national_observations(
+                    df, [story_map_country], map_layer, (map_year, map_year)), [story_map_country])
+            else:
+                st.markdown("**Observations statistiques — ensemble du périmètre**")
+                st.caption("Aucune destination sélectionnée : lecture des sept pays à la même date, sans classement.")
+                for observation in national_observations(df, DESTINATION_ORDER, map_layer, (map_year, map_year)):
+                    st.write(storytelling_text(observation.text))
+                st.markdown("**Limites de lecture**")
+                st.caption("Une absence n'est pas un zéro. Les données nationales ne décrivent pas les disparités internes aux pays. "
+                           "Les recettes sont en USD courants ; aucune causalité n'est déduite.")
+        # STORYTELLING END
